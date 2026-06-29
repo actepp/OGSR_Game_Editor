@@ -280,7 +280,7 @@ class MainWindow(QMainWindow):
         action_dialog_constructor.triggered.connect(self.open_dialog_constructor)
 
         themes_menu = QMenu("Темы", self)
-        view_menu.addMenu(themes_menu)
+        #view_menu.addMenu(themes_menu)
 
         action_dark = QAction("Тёмная тема", self)
         action_light = QAction("Светлая тема", self)

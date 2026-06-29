@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidget
 )
 from PyQt6.QtCore import Qt
 
@@ -8,27 +8,45 @@ class DialogConstructor(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        layout = QVBoxLayout()
-        self.setLayout(layout)
-
+        # Флаг изменений
         self.modified = False
 
-        title = QLabel("Конструктор диалогов")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("font-size: 22px; font-weight: bold;")
-        layout.addWidget(title)
+        # Основной горизонтальный layout — слева навигация, справа рабочая область
+        main_layout = QHBoxLayout()
+        self.setLayout(main_layout)
 
-        placeholder = QLabel("Здесь будет интерфейс конструктора диалогов")
+        # -----------------------------
+        # Левая панель — список диалогов
+        # -----------------------------
+        self.dialog_list = QListWidget()
+        self.dialog_list.setFixedWidth(250)
+        self.dialog_list.setStyleSheet("""
+            QListWidget {
+                background-color: #2b2b2b;
+                color: #ddd;
+                font-size: 14px;
+                padding: 5px;
+            }
+        """)
+
+        # Пока пусто — позже загрузим реальные диалоги
+        # self.dialog_list.addItem("dialog_01")
+        # self.dialog_list.addItem("dialog_02")
+
+        main_layout.addWidget(self.dialog_list)
+
+        # -----------------------------
+        # Правая рабочая область (пока пустая)
+        # -----------------------------
+        self.workspace = QWidget()
+        workspace_layout = QVBoxLayout()
+        self.workspace.setLayout(workspace_layout)
+
+        placeholder = QLabel("Рабочая область конструктора диалогов")
         placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        placeholder.setStyleSheet("color: #888; font-size: 16px;")
-        layout.addWidget(placeholder)
+        placeholder.setStyleSheet("color: #666; font-size: 18px;")
 
-        btn_layout = QHBoxLayout()
-        layout.addLayout(btn_layout)
+        workspace_layout.addWidget(placeholder)
+        workspace_layout.addStretch()
 
-        layout.addStretch()
-
-    def close_constructor(self):
-        # закрываем себя, возвращая пустой центральный виджет
-        if self.parent():
-            self.parent().setCentralWidget(QWidget())
+        main_layout.addWidget(self.workspace)

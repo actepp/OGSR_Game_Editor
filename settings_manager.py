@@ -9,6 +9,11 @@ DEFAULT_SETTINGS = {
         "width": 900,
         "height": 600,
         "maximized": False
+    },
+    "theme": "dark",
+    "font": {
+        "family": "Segoe UI",
+        "size": 10
     }
 }
 
