@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
     QMenuBar, QMenu
 )
 from PyQt6.QtGui import QAction
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QEvent
 from windows.window_settings import SettingsDialog
 
 import sys
@@ -62,12 +62,7 @@ class WelcomeDialog(QDialog):
         y = screen.y() + (screen.height() - self.height()) // 2
         self.move(x, y)
 
-    # -----------------------------
-    # Шаги приветственного мастера
-    # -----------------------------
-
     def update_step_ui(self):
-        # очищаем содержимое шага
         for i in reversed(range(self.step_layout.count())):
             widget = self.step_layout.itemAt(i).widget()
             if widget:
@@ -84,16 +79,13 @@ class WelcomeDialog(QDialog):
 
         self.btn_prev.setEnabled(self.current_step > 1)
 
-    # --- Шаг 1 ---
     def show_step_1(self):
         label = QLabel("ИЗМЕНИТЬ ОПИСАНИЕ\n\n"
                        "Здесь будет вводная информация о редакторе.")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.step_layout.addWidget(label)
-
         self.btn_next.setEnabled(True)
 
-    # --- Шаг 2 ---
     def show_step_2(self):
         label = QLabel("Выберите директорию gamedata OGSR")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -117,7 +109,6 @@ class WelcomeDialog(QDialog):
             self.path_label.setText(f"Выбрано: {path}")
             self.btn_next.setEnabled(True)
 
-    # --- Шаг 3 ---
     def show_step_3(self):
         label = QLabel("Проверка структуры OGSR gamedata")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -179,7 +170,6 @@ class WelcomeDialog(QDialog):
                 f"Для '{name}' выбрана папка:\n{path}"
             )
 
-    # --- Шаг 4 ---
     def finish_setup(self):
         final_settings = DEFAULT_SETTINGS.copy()
         final_settings["paths"] = {
@@ -188,10 +178,6 @@ class WelcomeDialog(QDialog):
 
         save_settings(final_settings)
         self.accept()
-
-    # -----------------------------
-    # Переключение шагов
-    # -----------------------------
 
     def next_step(self):
         self.current_step += 1
@@ -203,32 +189,6 @@ class WelcomeDialog(QDialog):
             self.update_step_ui()
 
 
-class SettingsDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-        self.setWindowTitle("Настройки")
-        self.resize(400, 300)
-        self.setModal(True)
-
-        layout = QVBoxLayout()
-        label = QLabel("Здесь будут настройки")
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(label)
-
-        self.setLayout(layout)
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        self.center_on_screen()
-
-    def center_on_screen(self):
-        screen = self.screen().geometry()
-        x = screen.x() + (screen.width() - self.width()) // 2
-        y = screen.y() + (screen.height() - self.height()) // 2
-        self.move(x, y)
-
-
 class MainWindow(QMainWindow):
     def __init__(self, settings):
         super().__init__()
@@ -237,13 +197,18 @@ class MainWindow(QMainWindow):
 
         self.settings = settings
 
+        # список дочерних окон
+        self.child_windows: list[QDialog] = []
+
+        # фильтр событий только на главное окно
+        self.installEventFilter(self)
+
         self.init_menu()
 
     def init_menu(self):
         menu_bar = QMenuBar(self)
         self.setMenuBar(menu_bar)
 
-        # --- Меню "Файл" ---
         file_menu = QMenu("Файл", self)
         menu_bar.addMenu(file_menu)
 
@@ -261,7 +226,6 @@ class MainWindow(QMainWindow):
         action_exit.triggered.connect(self.close)
         action_settings.triggered.connect(self.open_settings)
 
-        # --- Меню "Вид" ---
         view_menu = QMenu("Вид", self)
         menu_bar.addMenu(view_menu)
 
@@ -276,24 +240,60 @@ class MainWindow(QMainWindow):
 
     def open_settings(self):
         dlg = SettingsDialog(self)
-        dlg.exec()
+        self.child_windows.append(dlg)
+        dlg.show()
+
+    def eventFilter(self, obj, event):
+        # реагируем только на события главного окна
+        if obj is self and event.type() == QEvent.Type.WindowStateChange:
+            minimized = self.windowState() & Qt.WindowState.WindowMinimized
+
+            for w in self.child_windows:
+                if minimized:
+                    w.showMinimized()
+                else:
+                    w.showNormal()
+
+        return super().eventFilter(obj, event)
 
 
 def run_app():
     app = QApplication(sys.argv)
 
-    if settings_exist():
+    if not settings_exist():
+        dlg = WelcomeDialog()
+        dlg.exec()
         settings = load_settings()
     else:
-        settings = DEFAULT_SETTINGS
+        settings = load_settings()
 
     main_window = MainWindow(settings)
     main_window.show()
 
-    if not settings_exist():
-        dlg = WelcomeDialog(parent=main_window)
-        dlg.exec()
-
-        settings = load_settings()
+    if not validate_settings_paths(settings):
+        dlg = SettingsDialog(main_window)
+        main_window.child_windows.append(dlg)
+        dlg.show()
 
     sys.exit(app.exec())
+
+
+def validate_settings_paths(settings):
+    paths = settings.get("paths", {})
+    gamedata = paths.get("gamedata", "")
+
+    if not gamedata or not os.path.exists(gamedata):
+        return False
+
+    required = [
+        os.path.join(gamedata, "configs", "gameplay"),
+        os.path.join(gamedata, "configs", "creatures"),
+        os.path.join(gamedata, "spawns"),
+        os.path.join(gamedata, "configs", "text"),
+    ]
+
+    for p in required:
+        if not os.path.exists(p):
+            return False
+
+    return True
