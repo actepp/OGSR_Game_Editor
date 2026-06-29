@@ -40,6 +40,7 @@ class DialogConstructor(QWidget):
         # Поле поиска
         self.search_box = QLineEdit()
         self.search_box.setPlaceholderText("Поиск диалога...")
+        self.search_box.setClearButtonEnabled(True)   # ← вот это
         self.search_box.textChanged.connect(self.update_filter)
         left_layout.addWidget(self.search_box)
 
