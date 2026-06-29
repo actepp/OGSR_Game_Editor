@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QAction, QFont
 from PyQt6.QtCore import Qt, QEvent
 from windows.window_settings import SettingsDialog
+from windows.themes import apply_theme
 
 import sys
 import os
@@ -27,6 +28,9 @@ class WelcomeDialog(QDialog):
         self.current_step = 1
         self.selected_gamedata = None
         self.all_required_found = False
+
+        # Храним вручную выбранные пути
+        self.manual_paths = {}
 
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
@@ -61,11 +65,20 @@ class WelcomeDialog(QDialog):
         y = screen.y() + (screen.height() - self.height()) // 2
         self.move(x, y)
 
-    def update_step_ui(self):
-        for i in reversed(range(self.step_layout.count())):
-            widget = self.step_layout.itemAt(i).widget()
+    # Полная очистка layout (исправляет дублирование строк)
+    def clear_layout(self, layout):
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            sublayout = item.layout()
+
             if widget:
                 widget.deleteLater()
+            if sublayout:
+                self.clear_layout(sublayout)
+
+    def update_step_ui(self):
+        self.clear_layout(self.step_layout)
 
         if self.current_step == 1:
             self.show_step_1()
@@ -116,10 +129,10 @@ class WelcomeDialog(QDialog):
         gamedata = self.selected_gamedata
 
         checks = [
-            ("configs/gameplay", os.path.join(gamedata, "configs", "gameplay")),
-            ("configs/creatures", os.path.join(gamedata, "configs", "creatures")),
-            ("spawns", os.path.join(gamedata, "spawns")),
-            ("configs/text", os.path.join(gamedata, "configs", "text")),
+            ("configs/gameplay", self.manual_paths.get("configs/gameplay", os.path.join(gamedata, "configs", "gameplay"))),
+            ("configs/creatures", self.manual_paths.get("configs/creatures", os.path.join(gamedata, "configs", "creatures"))),
+            ("spawns", self.manual_paths.get("spawns", os.path.join(gamedata, "spawns"))),
+            ("configs/text", self.manual_paths.get("configs/text", os.path.join(gamedata, "configs", "text"))),
         ]
 
         self.all_required_found = True
@@ -162,12 +175,19 @@ class WelcomeDialog(QDialog):
 
     def select_missing_folder(self, name):
         path = QFileDialog.getExistingDirectory(self, f"Выбор папки для {name}")
-        if path:
-            QMessageBox.information(
-                self,
-                "Папка выбрана",
-                f"Для '{name}' выбрана папка:\n{path}"
-            )
+        if not path:
+            return
+
+        norm = path.replace("\\", "/")
+        self.manual_paths[name] = norm
+
+        QMessageBox.information(
+            self,
+            "Папка выбрана",
+            f"Для '{name}' выбрана папка:\n{norm}"
+        )
+
+        self.update_step_ui()
 
     def finish_setup(self):
         gamedata = self.selected_gamedata
@@ -176,10 +196,10 @@ class WelcomeDialog(QDialog):
 
         final_settings["paths"] = {
             "gamedata": gamedata,
-            "configs/gameplay": os.path.join(gamedata, "configs", "gameplay"),
-            "configs/creatures": os.path.join(gamedata, "configs", "creatures"),
-            "configs/text": os.path.join(gamedata, "configs", "text"),
-            "spawns": os.path.join(gamedata, "spawns"),
+            "configs/gameplay": self.manual_paths.get("configs/gameplay", os.path.join(gamedata, "configs", "gameplay")),
+            "configs/creatures": self.manual_paths.get("configs/creatures", os.path.join(gamedata, "configs", "creatures")),
+            "configs/text": self.manual_paths.get("configs/text", os.path.join(gamedata, "configs", "text")),
+            "spawns": self.manual_paths.get("spawns", os.path.join(gamedata, "spawns")),
         }
 
         save_settings(final_settings)
@@ -233,14 +253,27 @@ class MainWindow(QMainWindow):
         view_menu = QMenu("Вид", self)
         menu_bar.addMenu(view_menu)
 
+        themes_menu = QMenu("Темы", self)
+        view_menu.addMenu(themes_menu)
+
         action_dark = QAction("Тёмная тема", self)
         action_light = QAction("Светлая тема", self)
 
-        view_menu.addAction(action_dark)
-        view_menu.addAction(action_light)
+        themes_menu.addAction(action_dark)
+        themes_menu.addAction(action_light)
 
-        action_dark.triggered.connect(lambda: print("Тёмная тема"))
-        action_light.triggered.connect(lambda: print("Светлая тема"))
+        action_dark.triggered.connect(self.set_dark_theme)
+        action_light.triggered.connect(self.set_light_theme)
+
+    def set_dark_theme(self):
+        self.settings["theme"] = "dark"
+        save_settings(self.settings)
+        apply_theme("dark")
+
+    def set_light_theme(self):
+        self.settings["theme"] = "light"
+        save_settings(self.settings)
+        apply_theme("light")
 
     def open_settings(self):
         dlg = SettingsDialog(self)
@@ -297,7 +330,9 @@ def run_app():
         main_window = MainWindow(settings)
         main_window.show()
 
-    # 🔥 Применяем шрифт глобально
+    theme = settings.get("theme", "light")
+    apply_theme(theme)
+
     font_settings = settings.get("font", {"family": "Segoe UI", "size": 10})
     app.setFont(QFont(font_settings["family"], font_settings["size"]))
 
