@@ -5,10 +5,6 @@
         "maximized": false
     },
     "paths": {
-        "dialogs_root": "game_data/dialogs/"
-    },
-    "editor": {
-        "autosave": true,
-        "theme": "dark"
+        "gamedata": "F:/GitHub/NS_OGSR/gamedata"
     }
 }
