@@ -36,6 +36,9 @@ class SettingsDialog(QDialog):
             "size": 10
         })
 
+        # авто‑сканирование дефолтных подпапок
+        self.auto_scan_gamedata()
+
         main_layout = QHBoxLayout()
         self.setLayout(main_layout)
 
@@ -57,6 +60,32 @@ class SettingsDialog(QDialog):
         self.show_category_paths()
 
         self.category_list.currentRowChanged.connect(self.change_category)
+
+    # ---------------------------------------------------------
+    # Авто‑сканирование дефолтных подпапок внутри gamedata
+    # ---------------------------------------------------------
+    def auto_scan_gamedata(self):
+        gamedata = self.paths.get("gamedata")
+        if not gamedata or not os.path.exists(gamedata):
+            return
+
+        defaults = {
+            "configs/gameplay": os.path.join(gamedata, "configs", "gameplay"),
+            "configs/creatures": os.path.join(gamedata, "configs", "creatures"),
+            "configs/text": os.path.join(gamedata, "configs", "text"),
+            "spawns": os.path.join(gamedata, "spawns"),
+        }
+
+        changed = False
+
+        for key, default_path in defaults.items():
+            if os.path.exists(default_path):
+                self.paths[key] = normalize(default_path)
+                changed = True
+
+        if changed:
+            self.settings["paths"] = self.paths
+            save_settings(self.settings)
 
     # ---------------------------------------------------------
     # Жирность активного пункта
@@ -101,12 +130,12 @@ class SettingsDialog(QDialog):
         for name, path in items:
             self._add_path_row(name, path)
 
-        btn_save = QPushButton("Сохранить")
-        btn_save.clicked.connect(self.save_all)
-        self.btn_save = btn_save
-        self.content_layout.addWidget(btn_save)
+        self.btn_save = QPushButton("Сохранить")
+        self.btn_save.clicked.connect(self.save_all)
+        self.content_layout.addWidget(self.btn_save)
 
         self.content_layout.addStretch()
+
         self.update_save_button_state()
 
     # ---------------------------------------------------------
@@ -117,24 +146,19 @@ class SettingsDialog(QDialog):
         title.setStyleSheet("font-size: 18px; font-weight: bold;")
         self.content_layout.addWidget(title)
 
-        # Выбор семейства шрифта
         row_font = QHBoxLayout()
         lbl_font = QLabel("Семейство шрифта:")
         row_font.addWidget(lbl_font)
 
         self.font_combo = QFontComboBox()
-
-        # Фильтруем только нормальные шрифты (TTF/OTF)
         self.font_combo.setFontFilters(
             QFontComboBox.FontFilter.ScalableFonts
         )
-
         self.font_combo.setCurrentFont(QFont(self.font_settings["family"]))
         row_font.addWidget(self.font_combo)
 
         self.content_layout.addLayout(row_font)
 
-        # Выбор размера шрифта
         row_size = QHBoxLayout()
         lbl_size = QLabel("Размер шрифта:")
         row_size.addWidget(lbl_size)
@@ -146,7 +170,6 @@ class SettingsDialog(QDialog):
 
         self.content_layout.addLayout(row_size)
 
-        # Кнопка сохранения
         btn_save = QPushButton("Применить шрифт")
         btn_save.clicked.connect(self.save_font)
         self.content_layout.addWidget(btn_save)
@@ -166,13 +189,11 @@ class SettingsDialog(QDialog):
         self.settings["font"] = self.font_settings
         save_settings(self.settings)
 
-        # Применяем глобально
         font = QFont(family, size)
         app = QApplication.instance()
         app.setFont(font)
 
         self.close()
-
 
     # ---------------------------------------------------------
     # Создание строки пути
@@ -216,6 +237,7 @@ class SettingsDialog(QDialog):
             norm = normalize(path)
             label_widget.setText(norm)
             self.paths[name] = norm
+
             self.change_category(0)
 
     # ---------------------------------------------------------
@@ -230,11 +252,46 @@ class SettingsDialog(QDialog):
     # Активация кнопки "Сохранить"
     # ---------------------------------------------------------
     def update_save_button_state(self):
-        for icon in self.indicators:
-            if icon.text() == "✗":
-                self.btn_save.setEnabled(False)
-                return
-        self.btn_save.setEnabled(True)
+        has_errors = any(icon.text() == "✗" for icon in self.indicators)
+        theme = self.settings.get("theme", "light")
+
+        if has_errors:
+            self.btn_save.setEnabled(False)
+
+            if theme == "dark":
+                self.btn_save.setStyleSheet("""
+                    QPushButton {
+                        background-color: #2e2e2e;
+                        color: #777;
+                        border: 1px solid #444;
+                    }
+                """)
+            else:
+                self.btn_save.setStyleSheet("""
+                    QPushButton {
+                        background-color: #e0e0e0;
+                        color: #888;
+                        border: 1px solid #ccc;
+                    }
+                """)
+        else:
+            self.btn_save.setEnabled(True)
+            self.btn_save.setStyleSheet("""
+                QPushButton {
+                    background-color: #4caf50;
+                    color: white;
+                    border: 1px solid #3e8e41;
+                }
+                QPushButton:hover {
+                    background-color: #45a049;
+                }
+            """)
+
+    # ---------------------------------------------------------
+    # Динамическое обновление темы
+    # ---------------------------------------------------------
+    def refresh_theme(self):
+        self.update_save_button_state()
 
     # ---------------------------------------------------------
     # Очистка layout

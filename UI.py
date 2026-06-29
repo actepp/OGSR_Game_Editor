@@ -270,10 +270,21 @@ class MainWindow(QMainWindow):
         save_settings(self.settings)
         apply_theme("dark")
 
+        # обновляем открытые окна настроек
+        for w in self.child_windows:
+            if isinstance(w, SettingsDialog):
+                w.refresh_theme()
+
+
     def set_light_theme(self):
         self.settings["theme"] = "light"
         save_settings(self.settings)
         apply_theme("light")
+
+        # обновляем открытые окна настроек
+        for w in self.child_windows:
+            if isinstance(w, SettingsDialog):
+                w.refresh_theme()
 
     def open_settings(self):
         dlg = SettingsDialog(self)
