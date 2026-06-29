@@ -62,7 +62,8 @@ class ResourceLoader:
                         "id": dialog_id,
                         "priority": int(priority),
                         "xml_path": full_path,
-                        "xml_node": dialog
+                        "xml_node": dialog,
+                        "xml_root": root     # ← ДОБАВЛЕНО!
                     }
 
             except Exception as e:
@@ -79,4 +80,30 @@ class ResourceLoader:
         return list(self.dialogs.keys())
 
     def get_dialog(self, dialog_id):
-        return self.dialogs.get(dialog_id)
+        data = self.dialogs[dialog_id]
+
+        root = data["xml_root"]
+
+        # Ищем диалог по ID
+        dialog_node = None
+        for d in root.findall("dialog"):
+            if d.get("id") == dialog_id:
+                dialog_node = d
+                break
+
+        if dialog_node is None:
+            raise ValueError(f"Диалог {dialog_id} не найден в XML")
+
+        # Читаем глобальные свойства
+        preconditions = [n.text for n in dialog_node.findall("precondition")]
+        has_info = [n.text for n in dialog_node.findall("has_info")]
+        dont_has_info = [n.text for n in dialog_node.findall("dont_has_info")]
+
+        return {
+            "id": dialog_node.get("id"),
+            "priority": dialog_node.get("priority"),
+            "xml_path": data["xml_path"],
+            "preconditions": preconditions,
+            "has_info": has_info,
+            "dont_has_info": dont_has_info,
+        }
