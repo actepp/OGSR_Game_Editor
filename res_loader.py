@@ -100,8 +100,8 @@ class ResourceLoader:
         dont_has_info = [n.text for n in dialog_node.findall("dont_has_info")]
 
         return {
-            "id": dialog_node.get("id"),
-            "priority": dialog_node.get("priority"),
+            "id": dialog_id,
+            "priority": data["priority"],   # ← ВОТ ТАК!
             "xml_path": data["xml_path"],
             "preconditions": preconditions,
             "has_info": has_info,
