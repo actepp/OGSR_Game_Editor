@@ -1,0 +1,14 @@
+{
+    "window": {
+        "width": 900,
+        "height": 600,
+        "maximized": false
+    },
+    "paths": {
+        "dialogs_root": "game_data/dialogs/"
+    },
+    "editor": {
+        "autosave": true,
+        "theme": "dark"
+    }
+}
