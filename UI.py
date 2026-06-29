@@ -8,6 +8,8 @@ from PyQt6.QtGui import QAction, QFont
 from PyQt6.QtCore import Qt, QEvent
 from windows.window_settings import SettingsDialog
 from windows.themes import apply_theme
+from windows.dialog_constructor import DialogConstructor
+
 
 import sys
 import os
@@ -253,6 +255,23 @@ class MainWindow(QMainWindow):
         view_menu = QMenu("Вид", self)
         menu_bar.addMenu(view_menu)
 
+        # -----------------------------
+        # Меню "Инструменты"
+        # -----------------------------
+        tools_menu = QMenu("Инструменты", self)
+        menu_bar.addMenu(tools_menu)
+
+        # Подменю "Диалоги"
+        dialogs_menu = QMenu("Диалоги", self)
+        tools_menu.addMenu(dialogs_menu)
+
+        # Пункт "Конструктор"
+        action_dialog_constructor = QAction("Конструктор", self)
+        dialogs_menu.addAction(action_dialog_constructor)
+
+        action_dialog_constructor.triggered.connect(self.open_dialog_constructor)
+
+
         themes_menu = QMenu("Темы", self)
         view_menu.addMenu(themes_menu)
 
@@ -264,6 +283,11 @@ class MainWindow(QMainWindow):
 
         action_dark.triggered.connect(self.set_dark_theme)
         action_light.triggered.connect(self.set_light_theme)
+
+    def open_dialog_constructor(self):
+        dlg = DialogConstructor(self)
+        self.child_windows.append(dlg)
+        dlg.show()
 
     def set_dark_theme(self):
         self.settings["theme"] = "dark"
