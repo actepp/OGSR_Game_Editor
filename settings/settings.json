@@ -11,9 +11,9 @@
     },
     "paths": {
         "gamedata": "F:/GitHub/NS_OGSR/gamedata",
-        "configs/gameplay": "F:/GitHub/NS_OGSR/gamedata\\configs\\gameplay",
-        "configs/creatures": "F:/GitHub/NS_OGSR/gamedata\\configs\\creatures",
-        "configs/text": "F:/GitHub/NS_OGSR/gamedata\\configs\\text",
-        "spawns": "F:/GitHub/NS_OGSR/gamedata\\spawns"
+        "configs/gameplay": "F:/GitHub/NS_OGSR/gamedata/configs/gameplay",
+        "configs/creatures": "F:/GitHub/NS_OGSR/gamedata/configs/creatures",
+        "configs/text": "F:/GitHub/NS_OGSR/gamedata/configs/text",
+        "spawns": "F:/GitHub/NS_OGSR/gamedata/spawns"
     }
 }

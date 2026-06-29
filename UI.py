@@ -9,6 +9,7 @@ from PyQt6.QtCore import Qt, QEvent
 from windows.window_settings import SettingsDialog
 from windows.themes import apply_theme
 from windows.dialog_constructor import DialogConstructor
+from res_loader import ResourceLoader
 
 
 import sys
@@ -227,6 +228,7 @@ class MainWindow(QMainWindow):
         self.installEventFilter(self)
         self.init_menu()
         self.update_file_menu_state()
+        self.res_loader = ResourceLoader(self.settings)
 
     def init_menu(self):
         menu_bar = QMenuBar(self)

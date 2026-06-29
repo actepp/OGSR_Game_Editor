@@ -3,24 +3,28 @@
   "WorkspaceRootPath": "E:\\GitHub\\OGSR_Game_Editor\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\settings_manager.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:settings_manager.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_constructor.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:windows\\dialog_constructor.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\res_loader.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:res_loader.py||{8B382828-6202-11D1-8870-0000F87579D2}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\UI.py||{8B382828-6202-11D1-8870-0000F87579D2}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:UI.py||{8B382828-6202-11D1-8870-0000F87579D2}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_constructor.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:windows\\dialog_constructor.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+      "AbsoluteMoniker": "D:0:0:{DC704FD5-0C65-4FAC-9C23-95B6A5196521}|OGSR_Game_Editor.pyproj|E:\\GitHub\\OGSR_Game_Editor\\OGSR_Game_Editor.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{DC704FD5-0C65-4FAC-9C23-95B6A5196521}|OGSR_Game_Editor.pyproj|solutionrelative:OGSR_Game_Editor.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\settings_manager.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:settings_manager.py||{8B382828-6202-11D1-8870-0000F87579D2}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\windows\\window_settings.py||{8B382828-6202-11D1-8870-0000F87579D2}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:windows\\window_settings.py||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{DC704FD5-0C65-4FAC-9C23-95B6A5196521}|OGSR_Game_Editor.pyproj|E:\\GitHub\\OGSR_Game_Editor\\OGSR_Game_Editor.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{DC704FD5-0C65-4FAC-9C23-95B6A5196521}|OGSR_Game_Editor.pyproj|solutionrelative:OGSR_Game_Editor.py||{8B382828-6202-11D1-8870-0000F87579D2}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\windows\\themes.py||{8B382828-6202-11D1-8870-0000F87579D2}",
@@ -34,7 +38,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 5,
+          "SelectedChildIndex": 10,
           "Children": [
             {
               "$type": "Bookmark",
@@ -54,7 +58,20 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 1,
+              "Title": "res_loader.py",
+              "DocumentMoniker": "E:\\GitHub\\OGSR_Game_Editor\\res_loader.py",
+              "RelativeDocumentMoniker": "res_loader.py",
+              "ToolTip": "E:\\GitHub\\OGSR_Game_Editor\\res_loader.py",
+              "RelativeToolTip": "res_loader.py",
+              "ViewState": "AgIAACkAAAAAAAAAAAAAwFIAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-06-29T17:30:13.675Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
               "Title": "themes.py",
               "DocumentMoniker": "E:\\GitHub\\OGSR_Game_Editor\\windows\\themes.py",
               "RelativeDocumentMoniker": "windows\\themes.py",
@@ -66,7 +83,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 4,
               "Title": "settings_manager.py",
               "DocumentMoniker": "E:\\GitHub\\OGSR_Game_Editor\\settings_manager.py",
               "RelativeDocumentMoniker": "settings_manager.py",
@@ -79,7 +96,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 3,
               "Title": "OGSR_Game_Editor.py",
               "DocumentMoniker": "E:\\GitHub\\OGSR_Game_Editor\\OGSR_Game_Editor.py",
               "RelativeDocumentMoniker": "OGSR_Game_Editor.py",
@@ -87,24 +104,25 @@
               "RelativeToolTip": "OGSR_Game_Editor.py",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-06-29T04:39:15.504Z"
+              "WhenOpened": "2026-06-29T04:39:15.504Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 2,
               "Title": "UI.py",
               "DocumentMoniker": "E:\\GitHub\\OGSR_Game_Editor\\UI.py",
               "RelativeDocumentMoniker": "UI.py",
               "ToolTip": "E:\\GitHub\\OGSR_Game_Editor\\UI.py",
               "RelativeToolTip": "UI.py",
-              "ViewState": "AgIAAAQBAAAAAAAAAAAjwA0BAAAvAAAAAAAAAA==",
+              "ViewState": "AgIAAIEBAAAAAAAAAAAjwIcBAAAbAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
               "WhenOpened": "2026-06-29T04:42:10.698Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 5,
               "Title": "window_settings.py",
               "DocumentMoniker": "E:\\GitHub\\OGSR_Game_Editor\\windows\\window_settings.py",
               "RelativeDocumentMoniker": "windows\\window_settings.py",
@@ -117,13 +135,13 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 0,
               "Title": "dialog_constructor.py",
               "DocumentMoniker": "E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_constructor.py",
               "RelativeDocumentMoniker": "windows\\dialog_constructor.py",
               "ToolTip": "E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_constructor.py",
               "RelativeToolTip": "windows\\dialog_constructor.py",
-              "ViewState": "AgIAAAsAAAAAAAAAAAAAwCYAAAAfAAAAAAAAAA==",
+              "ViewState": "AgIAAFgAAAAAAAAAAAAAwIEAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
               "WhenOpened": "2026-06-29T16:04:48.095Z",
               "EditorCaption": ""
