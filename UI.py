@@ -19,7 +19,6 @@ from settings_manager import (
     save_settings, DEFAULT_SETTINGS
 )
 
-
 class WelcomeDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -222,35 +221,45 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("OGSR Game Editor")
         self.showMaximized()
-
+        self.workspace_active = False
         self.settings = settings
-
         self.child_windows: list[QDialog] = []
-
         self.installEventFilter(self)
-
         self.init_menu()
+        self.update_file_menu_state()
 
     def init_menu(self):
         menu_bar = QMenuBar(self)
         self.setMenuBar(menu_bar)
-
         file_menu = QMenu("Файл", self)
+        self.file_menu = file_menu
         menu_bar.addMenu(file_menu)
 
+        # Открыть
         action_open = QAction("Открыть...", self)
-        action_save = QAction("Сохранить", self)
-        action_settings = QAction("Настройки", self)
-        action_exit = QAction("Выход", self)
-
         file_menu.addAction(action_open)
-        file_menu.addAction(action_save)
+
+        # Закрыть рабочее пространство
+        self.action_close_tool = QAction("Закрыть", self)
+
+        self.action_close_tool.triggered.connect(self.close_current_tool)
+
+        # Сохранить
+        self.action_save = QAction("Сохранить", self)
+
         file_menu.addSeparator()
+
+        # Настройки
+        action_settings = QAction("Настройки", self)
         file_menu.addAction(action_settings)
+
+        # Выход
+        action_exit = QAction("Выход", self)
         file_menu.addAction(action_exit)
 
         action_exit.triggered.connect(self.close)
         action_settings.triggered.connect(self.open_settings)
+
 
         view_menu = QMenu("Вид", self)
         menu_bar.addMenu(view_menu)
@@ -265,12 +274,10 @@ class MainWindow(QMainWindow):
         dialogs_menu = QMenu("Диалоги", self)
         tools_menu.addMenu(dialogs_menu)
 
-        # Пункт "Конструктор"
         action_dialog_constructor = QAction("Конструктор", self)
         dialogs_menu.addAction(action_dialog_constructor)
 
         action_dialog_constructor.triggered.connect(self.open_dialog_constructor)
-
 
         themes_menu = QMenu("Темы", self)
         view_menu.addMenu(themes_menu)
@@ -284,10 +291,62 @@ class MainWindow(QMainWindow):
         action_dark.triggered.connect(self.set_dark_theme)
         action_light.triggered.connect(self.set_light_theme)
 
+    def update_file_menu_state(self):
+        if self.workspace_active:
+            # Добавляем пункты, если их нет
+            if self.action_close_tool not in self.file_menu.actions():
+                self.file_menu.insertAction(self.file_menu.actions()[1], self.action_close_tool)
+
+            if self.action_save not in self.file_menu.actions():
+                # после "Закрыть"
+                index = self.file_menu.actions().index(self.action_close_tool)
+                self.file_menu.insertAction(self.file_menu.actions()[index + 1], self.action_save)
+
+        else:
+            # Удаляем пункты, если они есть
+            if self.action_close_tool in self.file_menu.actions():
+                self.file_menu.removeAction(self.action_close_tool)
+
+            if self.action_save in self.file_menu.actions():
+                self.file_menu.removeAction(self.action_save)
+
+
+    def close_current_tool(self):
+        widget = self.centralWidget()
+
+        # Если центральный виджет — конструктор диалогов
+        if isinstance(widget, DialogConstructor):
+
+            # Проверяем флаг изменений
+            if widget.modified:
+                reply = QMessageBox.question(
+                    self,
+                    "Сохранить изменения?",
+                    "В конструкторе есть несохранённые изменения.\nСохранить перед закрытием?",
+                    QMessageBox.StandardButton.Yes |
+                    QMessageBox.StandardButton.No |
+                    QMessageBox.StandardButton.Cancel
+                )
+
+                if reply == QMessageBox.StandardButton.Cancel:
+                    return
+
+                if reply == QMessageBox.StandardButton.Yes:
+                    # позже добавим сохранение
+                    print("Сохраняем изменения...")
+
+            # Закрываем модуль
+            self.setCentralWidget(QWidget())
+            self.workspace_active = False
+            self.update_file_menu_state()
+
+
     def open_dialog_constructor(self):
-        dlg = DialogConstructor(self)
-        self.child_windows.append(dlg)
-        dlg.show()
+        widget = DialogConstructor(self)
+        self.setCentralWidget(widget)
+
+        self.workspace_active = True
+        self.update_file_menu_state()
 
     def set_dark_theme(self):
         self.settings["theme"] = "dark"

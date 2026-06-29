@@ -34,7 +34,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 8,
+          "SelectedChildIndex": 7,
           "Children": [
             {
               "$type": "Bookmark",
@@ -51,19 +51,6 @@
             {
               "$type": "Bookmark",
               "Name": "ST:128:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "dialog_constructor.py",
-              "DocumentMoniker": "E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_constructor.py",
-              "RelativeDocumentMoniker": "windows\\dialog_constructor.py",
-              "ToolTip": "E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_constructor.py",
-              "RelativeToolTip": "windows\\dialog_constructor.py",
-              "ViewState": "AgIAAAoAAAAAAAAAAAAAwDMAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-06-29T16:04:48.095Z",
-              "EditorCaption": ""
             },
             {
               "$type": "Document",
@@ -109,7 +96,7 @@
               "RelativeDocumentMoniker": "UI.py",
               "ToolTip": "E:\\GitHub\\OGSR_Game_Editor\\UI.py",
               "RelativeToolTip": "UI.py",
-              "ViewState": "AgIAAPwAAAAAAAAAAAAAACEBAAASAAAAAAAAAA==",
+              "ViewState": "AgIAAB4BAAAAAAAAAAAAACUBAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
               "WhenOpened": "2026-06-29T04:42:10.698Z",
               "EditorCaption": ""
@@ -125,6 +112,19 @@
               "ViewState": "AgIAAPcAAAAAAAAAAAAAwAMBAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
               "WhenOpened": "2026-06-29T11:43:51.113Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "dialog_constructor.py",
+              "DocumentMoniker": "E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_constructor.py",
+              "RelativeDocumentMoniker": "windows\\dialog_constructor.py",
+              "ToolTip": "E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_constructor.py",
+              "RelativeToolTip": "windows\\dialog_constructor.py",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABoAAAAkAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-06-29T16:04:48.095Z",
               "EditorCaption": ""
             }
           ]
