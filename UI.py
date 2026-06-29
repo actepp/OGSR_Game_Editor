@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QMessageBox, QToolTip, QFileDialog,
     QMenuBar, QMenu
 )
-from PyQt6.QtGui import QAction
+from PyQt6.QtGui import QAction, QFont
 from PyQt6.QtCore import Qt, QEvent
 from windows.window_settings import SettingsDialog
 
@@ -37,7 +37,6 @@ class WelcomeDialog(QDialog):
 
         self.layout.addWidget(self.step_widget)
 
-        # нижняя панель кнопок
         btn_layout = QHBoxLayout()
         self.btn_prev = QPushButton("Назад")
         self.btn_next = QPushButton("Далее")
@@ -171,9 +170,16 @@ class WelcomeDialog(QDialog):
             )
 
     def finish_setup(self):
+        gamedata = self.selected_gamedata
+
         final_settings = DEFAULT_SETTINGS.copy()
+
         final_settings["paths"] = {
-            "gamedata": self.selected_gamedata or ""
+            "gamedata": gamedata,
+            "configs/gameplay": os.path.join(gamedata, "configs", "gameplay"),
+            "configs/creatures": os.path.join(gamedata, "configs", "creatures"),
+            "configs/text": os.path.join(gamedata, "configs", "text"),
+            "spawns": os.path.join(gamedata, "spawns"),
         }
 
         save_settings(final_settings)
@@ -197,10 +203,8 @@ class MainWindow(QMainWindow):
 
         self.settings = settings
 
-        # список дочерних окон
         self.child_windows: list[QDialog] = []
 
-        # фильтр событий только на главное окно
         self.installEventFilter(self)
 
         self.init_menu()
@@ -244,7 +248,6 @@ class MainWindow(QMainWindow):
         dlg.show()
 
     def eventFilter(self, obj, event):
-        # реагируем только на события главного окна
         if obj is self and event.type() == QEvent.Type.WindowStateChange:
             minimized = self.windowState() & Qt.WindowState.WindowMinimized
 
@@ -257,43 +260,52 @@ class MainWindow(QMainWindow):
         return super().eventFilter(obj, event)
 
 
+def validate_settings_paths(settings):
+    paths = settings.get("paths", {})
+
+    required_keys = [
+        "gamedata",
+        "configs/gameplay",
+        "configs/creatures",
+        "configs/text",
+        "spawns"
+    ]
+
+    for key in required_keys:
+        p = paths.get(key, "")
+        if not p or not os.path.exists(p):
+            return False
+
+    return True
+
+
 def run_app():
     app = QApplication(sys.argv)
 
     if not settings_exist():
-        dlg = WelcomeDialog()
+        settings = DEFAULT_SETTINGS.copy()
+        main_window = MainWindow(settings)
+        main_window.show()
+
+        dlg = WelcomeDialog(main_window)
         dlg.exec()
+
         settings = load_settings()
+        main_window.settings = settings
     else:
         settings = load_settings()
+        main_window = MainWindow(settings)
+        main_window.show()
 
-    main_window = MainWindow(settings)
-    main_window.show()
+    # 🔥 Применяем шрифт глобально
+    font_settings = settings.get("font", {"family": "Segoe UI", "size": 10})
+    app.setFont(QFont(font_settings["family"], font_settings["size"]))
 
-    if not validate_settings_paths(settings):
+    paths_ok = validate_settings_paths(settings)
+
+    if not paths_ok:
         dlg = SettingsDialog(main_window)
         main_window.child_windows.append(dlg)
         dlg.show()
 
     sys.exit(app.exec())
-
-
-def validate_settings_paths(settings):
-    paths = settings.get("paths", {})
-    gamedata = paths.get("gamedata", "")
-
-    if not gamedata or not os.path.exists(gamedata):
-        return False
-
-    required = [
-        os.path.join(gamedata, "configs", "gameplay"),
-        os.path.join(gamedata, "configs", "creatures"),
-        os.path.join(gamedata, "spawns"),
-        os.path.join(gamedata, "configs", "text"),
-    ]
-
-    for p in required:
-        if not os.path.exists(p):
-            return False
-
-    return True
