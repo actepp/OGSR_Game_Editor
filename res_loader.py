@@ -4,9 +4,10 @@ import xml.etree.ElementTree as ET
 
 
 class ResourceLoader:
-    def __init__(self, settings):
+    def __init__(self, settings, progress_callback=None):
         self.settings = settings
         self.paths = settings.get("paths", {})
+        self.progress_callback = progress_callback
 
         self.ready = False
         self.errors = []
@@ -44,10 +45,14 @@ class ResourceLoader:
             self.errors.append(f"Папка dialogs не найдена: {dialogs_dir}")
             return
 
-        for filename in os.listdir(dialogs_dir):
-            if not filename.endswith(".xml"):
-                continue
+        # -----------------------------
+        # Подготовка прогресса
+        # -----------------------------
+        xml_files = [f for f in os.listdir(dialogs_dir) if f.endswith(".xml")]
+        total = len(xml_files)
+        processed = 0
 
+        for filename in xml_files:
             full_path = os.path.join(dialogs_dir, filename)
 
             try:
@@ -97,6 +102,15 @@ class ResourceLoader:
 
             except Exception as e:
                 self.errors.append(f"Ошибка чтения {filename}: {e}")
+
+            # -----------------------------
+            # Обновляем прогресс
+            # -----------------------------
+            processed += 1
+            if self.progress_callback:
+                percent = int((processed / total) * 100)
+                self.progress_callback(percent)
+
 
     # ---------------------------------------------------------
     # API

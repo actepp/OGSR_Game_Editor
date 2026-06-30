@@ -10,6 +10,8 @@ from windows.window_settings import SettingsDialog
 from windows.themes import apply_theme
 from windows.dialog_constructor import DialogConstructor
 from res_loader import ResourceLoader
+from loader_thread import LoaderThread
+from windows.loading_dialog import LoadingDialog
 
 
 import sys
@@ -244,7 +246,7 @@ class MainWindow(QMainWindow):
         self.installEventFilter(self)
         self.init_menu()
         self.update_file_menu_state()
-        self.res_loader = ResourceLoader(self.settings)
+        self.load_resources_with_progress()
 
     def init_menu(self):
         menu_bar = QMenuBar(self)
@@ -310,6 +312,24 @@ class MainWindow(QMainWindow):
 
         action_dark.triggered.connect(self.set_dark_theme)
         action_light.triggered.connect(self.set_light_theme)
+
+    def load_resources_with_progress(self):
+
+        dlg = LoadingDialog(self)
+        dlg.center_on_screen()
+        dlg.show()
+
+        self.loader_thread = LoaderThread(self.settings)
+        self.loader_thread.progress.connect(dlg.progress.setValue)
+
+        def on_finished(loader):
+            dlg.close()
+            self.res_loader = loader
+            print("Ресурсы загружены.")
+
+        self.loader_thread.finished.connect(on_finished)
+        self.loader_thread.start()
+
 
     def save_current_tool(self):
         widget = self.centralWidget()
