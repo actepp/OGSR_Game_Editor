@@ -264,6 +264,8 @@ class MainWindow(QMainWindow):
 
         # Сохранить
         self.action_save = QAction("Сохранить", self)
+        self.action_save.triggered.connect(self.save_current_tool)
+
 
         file_menu.addSeparator()
 
@@ -308,6 +310,13 @@ class MainWindow(QMainWindow):
 
         action_dark.triggered.connect(self.set_dark_theme)
         action_light.triggered.connect(self.set_light_theme)
+
+    def save_current_tool(self):
+        widget = self.centralWidget()
+
+        # Сохранение диалога
+        if isinstance(widget, DialogConstructor):
+            widget.save_current_dialog()
 
     def update_file_menu_state(self):
         if self.workspace_active:
@@ -360,7 +369,7 @@ class MainWindow(QMainWindow):
 
 
     def open_dialog_constructor(self):
-        self.reload_resources()  # ← ВАЖНО!
+        #self.reload_resources()  # ← ВАЖНО!
         widget = DialogConstructor(self)
         self.setCentralWidget(widget)
 

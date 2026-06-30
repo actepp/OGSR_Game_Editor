@@ -22,16 +22,14 @@ def make_vline():
 
 
 class EditLine(QLineEdit):
-    """QLineEdit, который не закрывает окно по Enter."""
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            self.clearFocus()   # фиксируем значение
-            return              # НЕ закрываем окно
+            self.clearFocus()
+            return
         super().keyPressEvent(event)
 
 
 class ClickFilter(QObject):
-    """Глобальный фильтр кликов — завершает редактирование."""
     def __init__(self, dialog):
         super().__init__()
         self.dialog = dialog
@@ -47,7 +45,6 @@ class ClickFilter(QObject):
 
 
 class EditableLabel(QLabel):
-    """Кликабельный QLabel, превращающийся в QLineEdit."""
     def __init__(self, text, grid_layout, on_commit, dialog):
         super().__init__(text)
         self.grid = grid_layout
@@ -111,7 +108,6 @@ class DialogProperties(QDialog):
         self.resize(550, 400)
         self.setWindowModality(Qt.WindowModality.WindowModal)
 
-        # глобальный фильтр кликов
         self.filter = ClickFilter(self)
         self.installEventFilter(self.filter)
 
@@ -126,7 +122,6 @@ class DialogProperties(QDialog):
 
         row = 0
 
-        # Путь (не редактируется)
         xml_path = dialog_data["xml_path"].replace("\\", "/")
         grid.addWidget(QLabel("Путь:"), row, 0)
         grid.addWidget(make_vline(), row, 1)
@@ -135,7 +130,6 @@ class DialogProperties(QDialog):
         grid.addWidget(make_line(), row, 0, 1, 3)
         row += 1
 
-        # Приоритет
         def commit_priority(val):
             try:
                 self.dialog_data["priority"] = int(val)
@@ -149,7 +143,6 @@ class DialogProperties(QDialog):
         grid.addWidget(make_line(), row, 0, 1, 3)
         row += 1
 
-        # PRECONDITIONS
         if dialog_data["preconditions"]:
             def commit_pre(val):
                 self.dialog_data["preconditions"] = [v.strip() for v in val.split(",")]
@@ -161,7 +154,6 @@ class DialogProperties(QDialog):
             grid.addWidget(make_line(), row, 0, 1, 3)
             row += 1
 
-        # HAS_INFO
         if dialog_data["has_info"]:
             def commit_hi(val):
                 self.dialog_data["has_info"] = [v.strip() for v in val.split(",")]
@@ -173,7 +165,6 @@ class DialogProperties(QDialog):
             grid.addWidget(make_line(), row, 0, 1, 3)
             row += 1
 
-        # DONT_HAS_INFO
         if dialog_data["dont_has_info"]:
             def commit_dhi(val):
                 self.dialog_data["dont_has_info"] = [v.strip() for v in val.split(",")]
@@ -190,14 +181,29 @@ class DialogProperties(QDialog):
         btn_layout = QHBoxLayout()
         main_layout.addLayout(btn_layout)
 
-        btn_close = QPushButton("Закрыть")
-        btn_close.clicked.connect(self.close)
-        btn_layout.addWidget(btn_close)
+        btn_save = QPushButton("Сохранить")
+        btn_cancel = QPushButton("Отмена")
+
+        btn_save.clicked.connect(self.save_dialog)
+        btn_cancel.clicked.connect(self.close)
+
+        btn_layout.addStretch()
+        btn_layout.addWidget(btn_save)
+        btn_layout.addWidget(btn_cancel)
 
     def finish_edit_external(self):
-        """Завершение редактирования при клике вне поля."""
         if self.active_editor is not None:
             self.active_editor.clearFocus()
+
+    def save_dialog(self):
+        dc = self.parent()
+        mw = dc.parent()
+        loader = mw.res_loader
+
+        dialog_id = self.dialog_data["id"]
+        loader.save_dialog(dialog_id, self.dialog_data)
+
+        self.close()
 
     def showEvent(self, event):
         super().showEvent(event)
