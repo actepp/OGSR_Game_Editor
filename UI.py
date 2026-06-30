@@ -205,7 +205,23 @@ class WelcomeDialog(QDialog):
         }
 
         save_settings(final_settings)
+
+        # ВАЖНО: вызвать перезагрузку ресурсов у главного окна
+        if self.parent() and hasattr(self.parent(), "reload_resources"):
+            self.parent().settings = final_settings
+            self.parent().reload_resources()
+
         self.accept()
+
+    def reload_resources(self):
+        """Перезагрузка ресурсов после мастера настройки."""
+        self.res_loader = ResourceLoader(self.settings)
+
+        if not self.res_loader.is_ready():
+            print("ResourceLoader: пути невалидны, ресурсы не загружены")
+        else:
+            print("ResourceLoader: ресурсы успешно загружены")
+
 
     def next_step(self):
         self.current_step += 1
@@ -344,11 +360,22 @@ class MainWindow(QMainWindow):
 
 
     def open_dialog_constructor(self):
+        self.reload_resources()  # ← ВАЖНО!
         widget = DialogConstructor(self)
         self.setCentralWidget(widget)
 
         self.workspace_active = True
         self.update_file_menu_state()
+
+    def reload_resources(self):
+        """Перезагрузка ресурсов после мастера настройки."""
+        self.res_loader = ResourceLoader(self.settings)
+
+        if not self.res_loader.is_ready():
+            print("ResourceLoader: пути невалидны, ресурсы не загружены")
+        else:
+            print("ResourceLoader: ресурсы успешно загружены")
+
 
     def set_dark_theme(self):
         self.settings["theme"] = "dark"
