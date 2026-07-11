@@ -70,8 +70,7 @@
               "RelativeToolTip": "res_loader.py",
               "ViewState": "AgIAAI8AAAAAAAAAAAAAwLgAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-06-29T17:30:13.675Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-29T17:30:13.675Z"
             },
             {
               "$type": "Document",
@@ -95,8 +94,7 @@
               "RelativeToolTip": "settings_manager.py",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAACMAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-06-29T04:46:48.702Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-29T04:46:48.702Z"
             },
             {
               "$type": "Document",
@@ -120,8 +118,7 @@
               "RelativeToolTip": "UI.py",
               "ViewState": "AgIAALQBAAAAAAAAAAAjwMkBAAARAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-06-29T04:42:10.698Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-29T04:42:10.698Z"
             },
             {
               "$type": "Document",
@@ -133,8 +130,7 @@
               "RelativeToolTip": "windows\\window_settings.py",
               "ViewState": "AgIAAEIAAAAAAAAAAAAAAFcAAAA5AAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-06-29T11:43:51.113Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-29T11:43:51.113Z"
             },
             {
               "$type": "Document",
@@ -146,8 +142,7 @@
               "RelativeToolTip": "windows\\dialog_constructor.py",
               "ViewState": "AgIAAEYAAAAAAAAAAAAjwE4AAAArAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-06-29T16:04:48.095Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-29T16:04:48.095Z"
             },
             {
               "$type": "Document",
@@ -157,7 +152,7 @@
               "RelativeDocumentMoniker": "windows\\dialog_properties.py",
               "ToolTip": "E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_properties.py",
               "RelativeToolTip": "windows\\dialog_properties.py",
-              "ViewState": "AgIAAJ8AAAAAAAAAAAAAALEAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAHEAAAAAAAAAAAAjwIcAAAAYAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
               "WhenOpened": "2026-06-29T18:01:10.966Z",
               "EditorCaption": ""

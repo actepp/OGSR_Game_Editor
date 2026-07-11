@@ -1,10 +1,9 @@
 import os
 import re
 
-
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QPushButton,
-    QHBoxLayout, QGridLayout, QFrame, QLineEdit, QWidget
+    QHBoxLayout, QGridLayout, QFrame, QLineEdit, QWidget, QSizePolicy
 )
 from PyQt6.QtCore import Qt, QObject, QEvent
 
@@ -26,10 +25,26 @@ def make_vline():
 
 
 class EditLine(QLineEdit):
+    def __init__(self, text, dialog, label):
+        super().__init__(text)
+        self.dialog = dialog
+        self.label = label
+
+        self.setStyleSheet("padding: 2px;")
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
     def keyPressEvent(self, event):
+        # ENTER → сохранить
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self.clearFocus()
             return
+
+        # ESC → отмена
+        if event.key() == Qt.Key.Key_Escape:
+            self.setText(self.label.text())
+            self.dialog.cancel_edit()
+            return
+
         super().keyPressEvent(event)
 
 
@@ -67,8 +82,7 @@ class EditableLabel(QLabel):
 
         row, col, _, _ = self.grid.getItemPosition(index)
 
-        editor = EditLine(self.text())
-        editor.setStyleSheet("padding: 2px;")
+        editor = EditLine(self.text(), self.dialog, self)
         editor.editingFinished.connect(lambda: self.finish_edit(editor))
 
         self.grid.removeWidget(self)
@@ -118,7 +132,8 @@ class DialogProperties(QDialog):
         main_layout = QVBoxLayout()
         self.setLayout(main_layout)
 
-        grid = QGridLayout()
+        self.grid = QGridLayout()
+        grid = self.grid
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 0)
         grid.setColumnStretch(2, 3)
@@ -127,7 +142,7 @@ class DialogProperties(QDialog):
         row = 0
 
         # ---------------------------------------------------------
-        # Строка с именем диалога (выделяемая)
+        # Имя диалога
         # ---------------------------------------------------------
         name_label = QLabel(dialog_id)
         name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -187,14 +202,11 @@ class DialogProperties(QDialog):
 
                 exists = self.check_precondition(pre)
 
-                # Левый столбец
                 lbl_name = QLabel("Precondition:")
                 grid.addWidget(lbl_name, row, 0)
 
-                # Вертикальная линия (как в Has_info)
                 grid.addWidget(make_vline(), row, 1)
 
-                # Правый столбец — редактируемое значение
                 lbl = EditableLabel(
                     pre,
                     grid,
@@ -202,7 +214,6 @@ class DialogProperties(QDialog):
                     self
                 )
 
-                # Подсветка ошибки
                 if not exists:
                     lbl_name.setStyleSheet("color: red; font-weight: bold;")
                     lbl.setStyleSheet("background-color: #330000; color: red; padding: 2px;")
@@ -213,8 +224,6 @@ class DialogProperties(QDialog):
                 grid.addWidget(lbl, row, 2)
 
                 row += 1
-
-                # Горизонтальная линия под строкой
                 grid.addWidget(make_line(), row, 0, 1, 3)
                 row += 1
 
@@ -227,13 +236,9 @@ class DialogProperties(QDialog):
 
             for i, hi in enumerate(dialog_data["has_info"]):
 
-                # Левый столбец
                 grid.addWidget(QLabel("Has Info:"), row, 0)
-
-                # Вертикальная линия
                 grid.addWidget(make_vline(), row, 1)
 
-                # Правый столбец — редактируемое значение
                 lbl = EditableLabel(
                     hi,
                     grid,
@@ -243,11 +248,8 @@ class DialogProperties(QDialog):
                 grid.addWidget(lbl, row, 2)
 
                 row += 1
-
-                # Горизонтальная линия под КАЖДЫМ параметром
                 grid.addWidget(make_line(), row, 0, 1, 3)
                 row += 1
-
 
         # ---------------------------------------------------------
         # Dont Has Info
@@ -270,7 +272,6 @@ class DialogProperties(QDialog):
                 grid.addWidget(lbl, row, 2)
 
                 row += 1
-
                 grid.addWidget(make_line(), row, 0, 1, 3)
                 row += 1
 
@@ -296,6 +297,25 @@ class DialogProperties(QDialog):
         if self.active_editor is not None:
             self.active_editor.clearFocus()
 
+    def cancel_edit(self):
+        editor = self.active_editor
+        label = self.active_label
+
+        if editor is None or label is None:
+            return
+
+        index = self.grid.indexOf(editor)
+        row, col, _, _ = self.grid.getItemPosition(index)
+
+        self.grid.removeWidget(editor)
+        editor.deleteLater()
+
+        self.grid.addWidget(label, row, col)
+        label.show()
+
+        self.active_editor = None
+        self.active_label = None
+
     def save_dialog(self):
         dc = self.parent()
         mw = dc.parent()
@@ -317,9 +337,6 @@ class DialogProperties(QDialog):
         self.move(x, y)
 
     def check_precondition(self, precondition: str) -> bool:
-        import os
-        import re
-
         if "." not in precondition:
             return False
 
@@ -332,7 +349,6 @@ class DialogProperties(QDialog):
             print("ERROR: scripts path not found:", scripts_root)
             return False
 
-        # Ищем файл модуля в любой подпапке scripts
         target_file = None
         for root, dirs, files in os.walk(scripts_root):
             for f in files:
@@ -347,7 +363,6 @@ class DialogProperties(QDialog):
             print("ERROR: module file not found:", module)
             return False
 
-        # читаем файл (UTF‑8 → CP1251 fallback)
         try:
             with open(target_file, "r", encoding="utf-8") as f:
                 content = f.read()
@@ -359,7 +374,6 @@ class DialogProperties(QDialog):
                 print("ERROR reading script:", e)
                 return False
 
-        # ищем функцию
         pattern = rf"function\s+{func}\s*\("
         found = re.search(pattern, content) is not None
 
