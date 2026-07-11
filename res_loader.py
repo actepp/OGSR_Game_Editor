@@ -25,8 +25,10 @@ class ResourceLoader:
             "configs/gameplay",
             "configs/creatures",
             "configs/text",
-            "spawns"
+            "spawns",
+            "scripts"   # ← ДОБАВЛЕНО
         ]
+
 
         for key in required:
             path = self.paths.get(key)

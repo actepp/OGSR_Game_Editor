@@ -204,6 +204,7 @@ class WelcomeDialog(QDialog):
             "configs/creatures": self.manual_paths.get("configs/creatures", os.path.join(gamedata, "configs", "creatures")),
             "configs/text": self.manual_paths.get("configs/text", os.path.join(gamedata, "configs", "text")),
             "spawns": self.manual_paths.get("spawns", os.path.join(gamedata, "spawns")),
+            "scripts": os.path.join(gamedata, "scripts"),
         }
 
         save_settings(final_settings)
@@ -453,7 +454,8 @@ def validate_settings_paths(settings):
         "configs/gameplay",
         "configs/creatures",
         "configs/text",
-        "spawns"
+        "spawns",
+        "scripts"
     ]
 
     for key in required_keys:

@@ -15,6 +15,7 @@
         "configs/creatures": "F:/GitHub/NS_OGSR/gamedata/configs/creatures",
         "configs/text": "F:/GitHub/NS_OGSR/gamedata/configs/text",
         "spawns": "F:/GitHub/NS_OGSR/gamedata/spawns",
-        "configs": "F:/GitHub/NS_OGSR/gamedata/configs"
+        "configs": "F:/GitHub/NS_OGSR/gamedata/configs",
+        "scripts": "F:/GitHub/NS_OGSR/gamedata/scripts"
     }
 }

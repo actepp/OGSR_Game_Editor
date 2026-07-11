@@ -1,6 +1,10 @@
+import os
+import re
+
+
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QPushButton,
-    QHBoxLayout, QGridLayout, QFrame, QLineEdit
+    QHBoxLayout, QGridLayout, QFrame, QLineEdit, QWidget
 )
 from PyQt6.QtCore import Qt, QObject, QEvent
 
@@ -176,43 +180,99 @@ class DialogProperties(QDialog):
         # Preconditions
         # ---------------------------------------------------------
         if dialog_data["preconditions"]:
-            def commit_pre(val):
-                self.dialog_data["preconditions"] = [v.strip() for v in val.split(",")]
+            def commit_pre(index, val):
+                self.dialog_data["preconditions"][index] = val.strip()
 
-            grid.addWidget(QLabel("Preconditions:"), row, 0)
-            grid.addWidget(make_vline(), row, 1)
-            grid.addWidget(EditableLabel(", ".join(dialog_data["preconditions"]), grid, commit_pre, self), row, 2)
-            row += 1
-            grid.addWidget(make_line(), row, 0, 1, 3)
-            row += 1
+            for i, pre in enumerate(dialog_data["preconditions"]):
+
+                exists = self.check_precondition(pre)
+
+                # Левый столбец
+                lbl_name = QLabel("Precondition:")
+                grid.addWidget(lbl_name, row, 0)
+
+                # Вертикальная линия (как в Has_info)
+                grid.addWidget(make_vline(), row, 1)
+
+                # Правый столбец — редактируемое значение
+                lbl = EditableLabel(
+                    pre,
+                    grid,
+                    lambda v, idx=i: commit_pre(idx, v),
+                    self
+                )
+
+                # Подсветка ошибки
+                if not exists:
+                    lbl_name.setStyleSheet("color: red; font-weight: bold;")
+                    lbl.setStyleSheet("background-color: #330000; color: red; padding: 2px;")
+                else:
+                    lbl_name.setStyleSheet("")
+                    lbl.setStyleSheet("padding: 2px;")
+
+                grid.addWidget(lbl, row, 2)
+
+                row += 1
+
+                # Горизонтальная линия под строкой
+                grid.addWidget(make_line(), row, 0, 1, 3)
+                row += 1
 
         # ---------------------------------------------------------
         # Has Info
         # ---------------------------------------------------------
         if dialog_data["has_info"]:
-            def commit_hi(val):
-                self.dialog_data["has_info"] = [v.strip() for v in val.split(",")]
+            def commit_hi(index, val):
+                self.dialog_data["has_info"][index] = val.strip()
 
-            grid.addWidget(QLabel("Has Info:"), row, 0)
-            grid.addWidget(make_vline(), row, 1)
-            grid.addWidget(EditableLabel(", ".join(dialog_data["has_info"]), grid, commit_hi, self), row, 2)
-            row += 1
-            grid.addWidget(make_line(), row, 0, 1, 3)
-            row += 1
+            for i, hi in enumerate(dialog_data["has_info"]):
+
+                # Левый столбец
+                grid.addWidget(QLabel("Has Info:"), row, 0)
+
+                # Вертикальная линия
+                grid.addWidget(make_vline(), row, 1)
+
+                # Правый столбец — редактируемое значение
+                lbl = EditableLabel(
+                    hi,
+                    grid,
+                    lambda v, idx=i: commit_hi(idx, v),
+                    self
+                )
+                grid.addWidget(lbl, row, 2)
+
+                row += 1
+
+                # Горизонтальная линия под КАЖДЫМ параметром
+                grid.addWidget(make_line(), row, 0, 1, 3)
+                row += 1
+
 
         # ---------------------------------------------------------
         # Dont Has Info
         # ---------------------------------------------------------
         if dialog_data["dont_has_info"]:
-            def commit_dhi(val):
-                self.dialog_data["dont_has_info"] = [v.strip() for v in val.split(",")]
+            def commit_dhi(index, val):
+                self.dialog_data["dont_has_info"][index] = val.strip()
 
-            grid.addWidget(QLabel("Dont Has Info:"), row, 0)
-            grid.addWidget(make_vline(), row, 1)
-            grid.addWidget(EditableLabel(", ".join(dialog_data["dont_has_info"]), grid, commit_dhi, self), row, 2)
-            row += 1
-            grid.addWidget(make_line(), row, 0, 1, 3)
-            row += 1
+            for i, dhi in enumerate(dialog_data["dont_has_info"]):
+
+                grid.addWidget(QLabel("Dont Has Info:"), row, 0)
+                grid.addWidget(make_vline(), row, 1)
+
+                lbl = EditableLabel(
+                    dhi,
+                    grid,
+                    lambda v, idx=i: commit_dhi(idx, v),
+                    self
+                )
+                grid.addWidget(lbl, row, 2)
+
+                row += 1
+
+                grid.addWidget(make_line(), row, 0, 1, 3)
+                row += 1
 
         main_layout.addStretch()
 
@@ -255,3 +315,55 @@ class DialogProperties(QDialog):
         x = screen.x() + (screen.width() - self.width()) // 2
         y = screen.y() + (screen.height() - self.height()) // 2
         self.move(x, y)
+
+    def check_precondition(self, precondition: str) -> bool:
+        import os
+        import re
+
+        if "." not in precondition:
+            return False
+
+        module, func = precondition.split(".", 1)
+
+        loader = self.parent().parent().res_loader
+        scripts_root = loader.paths.get("scripts")
+
+        if not scripts_root or not os.path.exists(scripts_root):
+            print("ERROR: scripts path not found:", scripts_root)
+            return False
+
+        # Ищем файл модуля в любой подпапке scripts
+        target_file = None
+        for root, dirs, files in os.walk(scripts_root):
+            for f in files:
+                name = f.lower()
+                if name == f"{module.lower()}.script" or name == f"{module.lower()}.lua":
+                    target_file = os.path.join(root, f)
+                    break
+            if target_file:
+                break
+
+        if not target_file:
+            print("ERROR: module file not found:", module)
+            return False
+
+        # читаем файл (UTF‑8 → CP1251 fallback)
+        try:
+            with open(target_file, "r", encoding="utf-8") as f:
+                content = f.read()
+        except UnicodeDecodeError:
+            try:
+                with open(target_file, "r", encoding="cp1251") as f:
+                    content = f.read()
+            except Exception as e:
+                print("ERROR reading script:", e)
+                return False
+
+        # ищем функцию
+        pattern = rf"function\s+{func}\s*\("
+        found = re.search(pattern, content) is not None
+
+        if not found:
+            print(f"ERROR: function {func} not found in {target_file}")
+
+        return found

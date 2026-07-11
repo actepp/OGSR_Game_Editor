@@ -18,7 +18,8 @@ REQUIRED_PATHS = [
     "configs",
     "configs/gameplay",
     "configs/creatures",
-    "spawns"
+    "spawns",
+    "scripts"
 ]
 
 
@@ -84,6 +85,7 @@ class SettingsDialog(QDialog):
             "configs/creatures": os.path.join(gamedata, "configs", "creatures"),
             "configs/text": os.path.join(gamedata, "configs", "text"),
             "spawns": os.path.join(gamedata, "spawns"),
+            "scripts": os.path.join(gamedata, "scripts"),
         }
 
         changed = False
@@ -134,7 +136,9 @@ class SettingsDialog(QDialog):
             ("configs/creatures", normalize(self.paths.get("configs/creatures", ""))),
             ("configs/text", normalize(self.paths.get("configs/text", ""))),
             ("spawns", normalize(self.paths.get("spawns", ""))),
+            ("scripts", normalize(self.paths.get("scripts", ""))),   # ← ДОБАВЛЕНО
         ]
+
 
         self.indicators = []
         self.indicator_names = []
