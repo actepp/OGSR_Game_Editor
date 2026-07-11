@@ -60,14 +60,39 @@ class ResourceLoader:
                 with open(full_path, "r", encoding="utf-8") as f:
                     lines = f.readlines()
 
+                # --- Проходим по всем диалогам в файле ---
                 for dialog in root.findall("dialog"):
                     dialog_id = dialog.get("id")
 
+                    # --- Ищем начало диалога ---
+                    start = None
+                    pattern = rf'<dialog\s+[^>]*id="{dialog_id}"'
+                    for i, line in enumerate(lines):
+                        if re.search(pattern, line):
+                            start = i
+                            break
+
+                    # --- Ищем конец диалога ---
+                    end = None
+                    if start is not None:
+                        for i in range(start + 1, len(lines)):
+                            if "</dialog>" in lines[i]:
+                                end = i
+                                break
+
+                    # --- Fallback если не нашли границы ---
+                    if start is None or end is None:
+                        print(f"[WARN] Диалог {dialog_id}: не удалось определить границы, fallback.")
+                        start = 0
+                        end = len(lines) - 1
+
+                    # --- Строим line_map только внутри диалога ---
                     pre_lines = []
                     has_lines = []
                     dont_lines = []
 
-                    for i, line in enumerate(lines):
+                    for i in range(start, end + 1):
+                        line = lines[i]
                         if "<precondition>" in line and "<phrase" not in line:
                             pre_lines.append(i)
                         if "<has_info>" in line and "<phrase" not in line:
@@ -75,6 +100,7 @@ class ResourceLoader:
                         if "<dont_has_info>" in line and "<phrase" not in line:
                             dont_lines.append(i)
 
+                    # --- Сохраняем диалог ---
                     self.dialogs[dialog_id] = {
                         "id": dialog_id,
                         "xml_path": full_path,
@@ -127,23 +153,47 @@ class ResourceLoader:
     def save_dialog(self, dialog_id, new_data):
         entry = self.dialogs[dialog_id]
         lines = entry["lines"]
-        lm = entry["line_map"]
         path = entry["xml_path"]
 
-        # preconditions
-        for idx, val in zip(lm["pre"], new_data["preconditions"]):
-            lines[idx] = f"    <precondition>{val}</precondition>\n"
+        # строки, которые нужно удалить
+        to_delete = new_data.get("_delete_lines", [])
 
-        # has_info
-        for idx, val in zip(lm["has"], new_data["has_info"]):
-            lines[idx] = f"    <has_info>{val}</has_info>\n"
+        # --- Ищем границы диалога ---
+        start = None
+        end = None
 
-        # dont_has_info
-        for idx, val in zip(lm["dont"], new_data["dont_has_info"]):
-            lines[idx] = f"    <dont_has_info>{val}</dont_has_info>\n"
+        pattern = rf'<dialog\s+[^>]*id="{dialog_id}"'
+        for i, line in enumerate(lines):
+            if re.search(pattern, line):
+                start = i
+                break
 
+        if start is not None:
+            for i in range(start + 1, len(lines)):
+                if "</dialog>" in lines[i]:
+                    end = i
+                    break
+
+        if start is None or end is None:
+            print(f"[ERROR] save_dialog: cannot find dialog boundaries for {dialog_id}")
+            return
+
+        # --- Удаляем строки ТОЛЬКО внутри диалога ---
+        new_lines = []
+
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+
+            if start <= i <= end:
+                if stripped in to_delete:
+                    # удаляем строку
+                    continue
+
+            new_lines.append(line)
+
+        # --- Сохраняем файл ---
         with open(path, "w", encoding="utf-8") as f:
-            f.writelines(lines)
+            f.writelines(new_lines)
 
         print(f"[OK] Диалог {dialog_id} сохранён.")
 
@@ -172,18 +222,43 @@ class ResourceLoader:
             print(f"[ERROR] reload_dialog: cannot read lines: {e}")
             return False
 
-        dialog_node = root.find("dialog")
+        # --- Ищем диалог по ID ---
+        dialog_node = None
+        for d in root.findall("dialog"):
+            if d.get("id") == dialog_id:
+                dialog_node = d
+                break
+
         if dialog_node is None:
-            print(f"[ERROR] reload_dialog: <dialog> node missing in '{xml_path}'")
+            print(f"[ERROR] reload_dialog: dialog '{dialog_id}' not found in XML")
             return False
 
-        dialog_id = dialog_node.get("id")
+        # --- Ищем границы диалога ---
+        start = None
+        pattern = rf'<dialog\s+[^>]*id="{dialog_id}"'
+        for i, line in enumerate(lines):
+            if re.search(pattern, line):
+                start = i
+                break
 
+        end = None
+        if start is not None:
+            for i in range(start + 1, len(lines)):
+                if "</dialog>" in lines[i]:
+                    end = i
+                    break
+
+        if start is None or end is None:
+            start = 0
+            end = len(lines) - 1
+
+        # --- Строим line_map ---
         pre_lines = []
         has_lines = []
         dont_lines = []
 
-        for i, line in enumerate(lines):
+        for i in range(start, end + 1):
+            line = lines[i]
             if "<precondition>" in line and "<phrase" not in line:
                 pre_lines.append(i)
             if "<has_info>" in line and "<phrase" not in line:

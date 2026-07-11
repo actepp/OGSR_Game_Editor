@@ -29,7 +29,6 @@ class EditLine(QLineEdit):
         super().__init__(text)
         self.dialog = dialog
         self.label = label
-
         self.setStyleSheet("padding: 2px;")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
@@ -106,7 +105,6 @@ class EditableLabel(QLabel):
         self.grid.addWidget(self, row, col)
         self.show()
 
-        # Проверка precondition
         if "preconditions" in self.dialog.dialog_data:
             try:
                 idx = self.dialog.dialog_data["preconditions"].index(new_value)
@@ -123,18 +121,52 @@ class EditableLabel(QLabel):
         self.dialog.active_label = None
 
 
+class DeleteButton(QPushButton):
+    def __init__(self, on_delete):
+        super().__init__("–")
+        self.on_delete = on_delete
+
+        self.setFixedWidth(30)
+        self.setStyleSheet("""
+            QPushButton {
+                background-color: #aa0000;
+                color: white;
+                font-weight: bold;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #cc0000;
+            }
+        """)
+
+        self.clicked.connect(self.on_delete)
+
+
 class DialogProperties(QDialog):
     def __init__(self, parent, dialog_data):
         super().__init__(parent)
 
-        self.dialog_data = dialog_data
+        # ID диалога
         dialog_id = dialog_data["id"]
+
+        # доступ к loader
+        dc = self.parent()
+        mw = dc.parent()
+        self.loader = mw.res_loader
+        self.dialog_id = dialog_id
+
+        # ПЕРЕЧИТЫВАЕМ ДИАЛОГ ИЗ ФАЙЛА (важно!)
+        self.loader.reload_dialog(dialog_id)
+        self.dialog_data = self.loader.get_dialog(dialog_id)
+
+        # список строк для удаления
+        self.dialog_data["_delete_lines"] = []
 
         self.active_editor = None
         self.active_label = None
 
         self.setWindowTitle(f"Свойства {dialog_id}")
-        self.resize(550, 400)
+        self.resize(650, 500)
         self.setWindowModality(Qt.WindowModality.WindowModal)
 
         self.filter = ClickFilter(self)
@@ -148,6 +180,7 @@ class DialogProperties(QDialog):
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 0)
         grid.setColumnStretch(2, 3)
+        grid.setColumnStretch(3, 0)
         main_layout.addLayout(grid)
 
         row = 0
@@ -162,39 +195,43 @@ class DialogProperties(QDialog):
         """)
         name_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
-        grid.addWidget(name_label, row, 0, 1, 3)
+        grid.addWidget(name_label, row, 0, 1, 4)
         row += 1
 
-        grid.addWidget(make_line(), row, 0, 1, 3)
+        grid.addWidget(make_line(), row, 0, 1, 4)
         row += 1
 
         # Путь к XML
-        xml_path = dialog_data["xml_path"].replace("\\", "/")
+        xml_path = self.dialog_data["xml_path"].replace("\\", "/")
         grid.addWidget(QLabel("Путь:"), row, 0)
         grid.addWidget(make_vline(), row, 1)
 
         lbl_xml = QLabel(xml_path)
         lbl_xml.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         lbl_xml.setStyleSheet("color: #ccc;")
-        grid.addWidget(lbl_xml, row, 2)
+        grid.addWidget(lbl_xml, row, 2, 1, 2)
 
         row += 1
-        grid.addWidget(make_line(), row, 0, 1, 3)
+        grid.addWidget(make_line(), row, 0, 1, 4)
         row += 1
 
         # Preconditions
-        if dialog_data["preconditions"]:
+        if self.dialog_data["preconditions"]:
             def commit_pre(index, val):
                 self.dialog_data["preconditions"][index] = val.strip()
 
-            for i, pre in enumerate(dialog_data["preconditions"]):
+            for i, pre in enumerate(self.dialog_data["preconditions"]):
 
                 exists = self.check_precondition(pre)
 
                 lbl_name = QLabel("Precondition:")
                 grid.addWidget(lbl_name, row, 0)
-
                 grid.addWidget(make_vline(), row, 1)
+
+                row_widget = QWidget()
+                row_layout = QHBoxLayout()
+                row_layout.setContentsMargins(0, 0, 0, 0)
+                row_widget.setLayout(row_layout)
 
                 lbl = EditableLabel(
                     pre,
@@ -210,21 +247,40 @@ class DialogProperties(QDialog):
                     lbl_name.setStyleSheet("")
                     lbl.setStyleSheet("padding: 2px;")
 
-                grid.addWidget(lbl, row, 2)
+                def delete_pre(i=i, row_widget=row_widget, lbl_name=lbl_name, value=pre):
+                    line_text = f"<precondition>{value}</precondition>"
+                    self.dialog_data["_delete_lines"].append(line_text)
+
+                    self.dialog_data["preconditions"].pop(i)
+                    row_widget.setParent(None)
+                    lbl_name.setParent(None)
+
+                del_btn = DeleteButton(delete_pre)
+
+                row_layout.addWidget(lbl)
+                row_layout.addWidget(del_btn)
+
+                grid.addWidget(row_widget, row, 2, 1, 2)
 
                 row += 1
-                grid.addWidget(make_line(), row, 0, 1, 3)
+                grid.addWidget(make_line(), row, 0, 1, 4)
                 row += 1
 
         # Has Info
-        if dialog_data["has_info"]:
+        if self.dialog_data["has_info"]:
             def commit_hi(index, val):
                 self.dialog_data["has_info"][index] = val.strip()
 
-            for i, hi in enumerate(dialog_data["has_info"]):
+            for i, hi in enumerate(self.dialog_data["has_info"]):
 
-                grid.addWidget(QLabel("Has Info:"), row, 0)
+                lbl_name = QLabel("Has Info:")
+                grid.addWidget(lbl_name, row, 0)
                 grid.addWidget(make_vline(), row, 1)
+
+                row_widget = QWidget()
+                row_layout = QHBoxLayout()
+                row_layout.setContentsMargins(0, 0, 0, 0)
+                row_widget.setLayout(row_layout)
 
                 lbl = EditableLabel(
                     hi,
@@ -232,21 +288,41 @@ class DialogProperties(QDialog):
                     lambda v, idx=i: commit_hi(idx, v),
                     self
                 )
-                grid.addWidget(lbl, row, 2)
+
+                def delete_hi(i=i, row_widget=row_widget, lbl_name=lbl_name, value=hi):
+                    line_text = f"<has_info>{value}</has_info>"
+                    self.dialog_data["_delete_lines"].append(line_text)
+
+                    self.dialog_data["has_info"].pop(i)
+                    row_widget.setParent(None)
+                    lbl_name.setParent(None)
+
+                del_btn = DeleteButton(delete_hi)
+
+                row_layout.addWidget(lbl)
+                row_layout.addWidget(del_btn)
+
+                grid.addWidget(row_widget, row, 2, 1, 2)
 
                 row += 1
-                grid.addWidget(make_line(), row, 0, 1, 3)
+                grid.addWidget(make_line(), row, 0, 1, 4)
                 row += 1
 
         # Dont Has Info
-        if dialog_data["dont_has_info"]:
+        if self.dialog_data["dont_has_info"]:
             def commit_dhi(index, val):
                 self.dialog_data["dont_has_info"][index] = val.strip()
 
-            for i, dhi in enumerate(dialog_data["dont_has_info"]):
+            for i, dhi in enumerate(self.dialog_data["dont_has_info"]):
 
-                grid.addWidget(QLabel("Dont Has Info:"), row, 0)
+                lbl_name = QLabel("Dont Has Info:")
+                grid.addWidget(lbl_name, row, 0)
                 grid.addWidget(make_vline(), row, 1)
+
+                row_widget = QWidget()
+                row_layout = QHBoxLayout()
+                row_layout.setContentsMargins(0, 0, 0, 0)
+                row_widget.setLayout(row_layout)
 
                 lbl = EditableLabel(
                     dhi,
@@ -254,15 +330,28 @@ class DialogProperties(QDialog):
                     lambda v, idx=i: commit_dhi(idx, v),
                     self
                 )
-                grid.addWidget(lbl, row, 2)
+
+                def delete_dhi(i=i, row_widget=row_widget, lbl_name=lbl_name, value=dhi):
+                    line_text = f"<dont_has_info>{value}</dont_has_info>"
+                    self.dialog_data["_delete_lines"].append(line_text)
+
+                    self.dialog_data["dont_has_info"].pop(i)
+                    row_widget.setParent(None)
+                    lbl_name.setParent(None)
+
+                del_btn = DeleteButton(delete_dhi)
+
+                row_layout.addWidget(lbl)
+                row_layout.addWidget(del_btn)
+
+                grid.addWidget(row_widget, row, 2, 1, 2)
 
                 row += 1
-                grid.addWidget(make_line(), row, 0, 1, 3)
+                grid.addWidget(make_line(), row, 0, 1, 4)
                 row += 1
 
         main_layout.addStretch()
 
-        # Кнопки
         btn_layout = QHBoxLayout()
         main_layout.addLayout(btn_layout)
 
