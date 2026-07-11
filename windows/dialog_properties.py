@@ -122,14 +122,43 @@ class DialogProperties(QDialog):
 
         row = 0
 
+        # ---------------------------------------------------------
+        # Строка с именем диалога (выделяемая)
+        # ---------------------------------------------------------
+        name_label = QLabel(dialog_id)
+        name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        name_label.setStyleSheet("""
+            font-size: 16px;
+            font-weight: bold;
+            padding: 6px;
+        """)
+        name_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+
+        grid.addWidget(name_label, row, 0, 1, 3)
+        row += 1
+
+        grid.addWidget(make_line(), row, 0, 1, 3)
+        row += 1
+
+        # ---------------------------------------------------------
+        # Путь к XML
+        # ---------------------------------------------------------
         xml_path = dialog_data["xml_path"].replace("\\", "/")
         grid.addWidget(QLabel("Путь:"), row, 0)
         grid.addWidget(make_vline(), row, 1)
-        grid.addWidget(QLabel(xml_path), row, 2)
+
+        lbl_xml = QLabel(xml_path)
+        lbl_xml.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        lbl_xml.setStyleSheet("color: #ccc;")
+        grid.addWidget(lbl_xml, row, 2)
+
         row += 1
         grid.addWidget(make_line(), row, 0, 1, 3)
         row += 1
 
+        # ---------------------------------------------------------
+        # Приоритет
+        # ---------------------------------------------------------
         def commit_priority(val):
             try:
                 self.dialog_data["priority"] = int(val)
@@ -143,6 +172,9 @@ class DialogProperties(QDialog):
         grid.addWidget(make_line(), row, 0, 1, 3)
         row += 1
 
+        # ---------------------------------------------------------
+        # Preconditions
+        # ---------------------------------------------------------
         if dialog_data["preconditions"]:
             def commit_pre(val):
                 self.dialog_data["preconditions"] = [v.strip() for v in val.split(",")]
@@ -154,6 +186,9 @@ class DialogProperties(QDialog):
             grid.addWidget(make_line(), row, 0, 1, 3)
             row += 1
 
+        # ---------------------------------------------------------
+        # Has Info
+        # ---------------------------------------------------------
         if dialog_data["has_info"]:
             def commit_hi(val):
                 self.dialog_data["has_info"] = [v.strip() for v in val.split(",")]
@@ -165,6 +200,9 @@ class DialogProperties(QDialog):
             grid.addWidget(make_line(), row, 0, 1, 3)
             row += 1
 
+        # ---------------------------------------------------------
+        # Dont Has Info
+        # ---------------------------------------------------------
         if dialog_data["dont_has_info"]:
             def commit_dhi(val):
                 self.dialog_data["dont_has_info"] = [v.strip() for v in val.split(",")]
@@ -178,6 +216,9 @@ class DialogProperties(QDialog):
 
         main_layout.addStretch()
 
+        # ---------------------------------------------------------
+        # Кнопки
+        # ---------------------------------------------------------
         btn_layout = QHBoxLayout()
         main_layout.addLayout(btn_layout)
 

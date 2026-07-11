@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QListWidget, QLineEdit, QSplitter, QMenu
+    QListWidget, QLineEdit, QSplitter, QMenu, QApplication
 )
 from PyQt6.QtGui import QAction
 from PyQt6.QtCore import Qt
@@ -19,6 +19,7 @@ class DialogConstructor(QWidget):
         self.setLayout(main_layout)
         main_layout.addWidget(splitter)
 
+        # Левая часть: поиск + список диалогов
         left_container = QWidget()
         left_layout = QVBoxLayout()
         left_container.setLayout(left_layout)
@@ -33,9 +34,13 @@ class DialogConstructor(QWidget):
         self.dialog_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.dialog_list.customContextMenuRequested.connect(self.open_context_menu)
 
+        # перехватываем клавиши для копирования
+        self.dialog_list.keyPressEvent = self._list_key_press
+
         left_layout.addWidget(self.dialog_list)
         splitter.addWidget(left_container)
 
+        # Правая часть: рабочая область (пока заглушка)
         right_container = QWidget()
         right_layout = QVBoxLayout()
         right_container.setLayout(right_layout)
@@ -49,9 +54,11 @@ class DialogConstructor(QWidget):
 
         splitter.setSizes([300, 900])
 
+        self.all_dialogs: list[str] = []
         self.load_dialogs()
 
     def load_dialogs(self):
+        """Загружает список диалогов из ResourceLoader и заполняет QListWidget."""
         loader = self.parent().res_loader
         dialog_ids = loader.get_dialog_list()
         dialog_ids.sort()
@@ -62,7 +69,8 @@ class DialogConstructor(QWidget):
         for d in dialog_ids:
             self.dialog_list.addItem(d)
 
-    def update_filter(self, text):
+    def update_filter(self, text: str):
+        """Фильтрация списка диалогов по подстроке."""
         text = text.lower()
         self.dialog_list.clear()
 
@@ -71,6 +79,7 @@ class DialogConstructor(QWidget):
                 self.dialog_list.addItem(d)
 
     def open_context_menu(self, position):
+        """Контекстное меню по правому клику на диалоге."""
         item = self.dialog_list.itemAt(position)
         if not item:
             return
@@ -83,12 +92,14 @@ class DialogConstructor(QWidget):
 
         menu.addAction(open_action)
         menu.addAction(props_action)
+        menu.addSeparator()
 
         props_action.triggered.connect(lambda: self.show_properties(dialog_id))
 
         menu.exec(self.dialog_list.mapToGlobal(position))
 
-    def show_properties(self, dialog_id):
+    def show_properties(self, dialog_id: str):
+        """Открывает окно свойств диалога."""
         loader = self.parent().res_loader
         dialog_data = loader.get_dialog(dialog_id)
 
@@ -96,7 +107,7 @@ class DialogConstructor(QWidget):
         dlg.show()
 
     def save_current_dialog(self):
-        """Сохраняет текущий выбранный диалог"""
+        """Сохраняет текущий выбранный диалог."""
         item = self.dialog_list.currentItem()
         if not item:
             return
@@ -105,3 +116,13 @@ class DialogConstructor(QWidget):
         loader = self.parent().res_loader
         data = loader.get_dialog(dialog_id)
         loader.save_dialog(dialog_id, data)
+
+    def _list_key_press(self, event):
+        """Обработка клавиш в списке диалогов (копирование Ctrl+C)."""
+        if event.key() == Qt.Key.Key_C and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            item = self.dialog_list.currentItem()
+            if item:
+                QApplication.clipboard().setText(item.text())
+        else:
+            # пробрасываем стандартное поведение
+            QListWidget.keyPressEvent(self.dialog_list, event)
