@@ -26,9 +26,8 @@ class ResourceLoader:
             "configs/creatures",
             "configs/text",
             "spawns",
-            "scripts"   # ← ДОБАВЛЕНО
+            "scripts"
         ]
-
 
         for key in required:
             path = self.paths.get(key)
@@ -47,9 +46,6 @@ class ResourceLoader:
             self.errors.append(f"Папка dialogs не найдена: {dialogs_dir}")
             return
 
-        # -----------------------------
-        # Подготовка прогресса
-        # -----------------------------
         xml_files = [f for f in os.listdir(dialogs_dir) if f.endswith(".xml")]
         total = len(xml_files)
         processed = 0
@@ -58,28 +54,20 @@ class ResourceLoader:
             full_path = os.path.join(dialogs_dir, filename)
 
             try:
-                # читаем XML
                 tree = ET.parse(full_path)
                 root = tree.getroot()
 
-                # читаем строки файла
                 with open(full_path, "r", encoding="utf-8") as f:
                     lines = f.readlines()
 
-                # ищем диалоги
                 for dialog in root.findall("dialog"):
                     dialog_id = dialog.get("id")
-                    priority = dialog.get("priority", "0")
 
-                    # ищем строки глобальных свойств
                     pre_lines = []
                     has_lines = []
                     dont_lines = []
-                    priority_line = None
 
                     for i, line in enumerate(lines):
-                        if f'<dialog id="{dialog_id}"' in line:
-                            priority_line = i
                         if "<precondition>" in line and "<phrase" not in line:
                             pre_lines.append(i)
                         if "<has_info>" in line and "<phrase" not in line:
@@ -89,13 +77,11 @@ class ResourceLoader:
 
                     self.dialogs[dialog_id] = {
                         "id": dialog_id,
-                        "priority": int(priority),
                         "xml_path": full_path,
                         "xml_node": dialog,
                         "xml_root": root,
                         "lines": lines,
                         "line_map": {
-                            "priority": priority_line,
                             "pre": pre_lines,
                             "has": has_lines,
                             "dont": dont_lines,
@@ -105,14 +91,10 @@ class ResourceLoader:
             except Exception as e:
                 self.errors.append(f"Ошибка чтения {filename}: {e}")
 
-            # -----------------------------
-            # Обновляем прогресс
-            # -----------------------------
             processed += 1
             if self.progress_callback:
                 percent = int((processed / total) * 100)
                 self.progress_callback(percent)
-
 
     # ---------------------------------------------------------
     # API
@@ -133,11 +115,10 @@ class ResourceLoader:
 
         return {
             "id": dialog_id,
-            "priority": data["priority"],
             "xml_path": data["xml_path"],
             "preconditions": preconditions,
             "has_info": has_info,
-            "dont_has_info": dont_has_info,
+            "dont_has_info": dont_has_info
         }
 
     # ---------------------------------------------------------
@@ -148,22 +129,6 @@ class ResourceLoader:
         lines = entry["lines"]
         lm = entry["line_map"]
         path = entry["xml_path"]
-
-        # priority
-        p_line = lm["priority"]
-        if p_line is not None:
-            old = lines[p_line]
-            if "priority=" in old:
-                lines[p_line] = re.sub(
-                    r'priority=".*?"',
-                    f'priority="{new_data["priority"]}"',
-                    old
-                )
-            else:
-                lines[p_line] = old.replace(
-                    ">",
-                    f' priority="{new_data["priority"]}">'
-                )
 
         # preconditions
         for idx, val in zip(lm["pre"], new_data["preconditions"]):
@@ -177,12 +142,14 @@ class ResourceLoader:
         for idx, val in zip(lm["dont"], new_data["dont_has_info"]):
             lines[idx] = f"    <dont_has_info>{val}</dont_has_info>\n"
 
-        # сохраняем файл
         with open(path, "w", encoding="utf-8") as f:
             f.writelines(lines)
 
         print(f"[OK] Диалог {dialog_id} сохранён.")
 
+    # ---------------------------------------------------------
+    # ПЕРЕЗАГРУЗКА ДИАЛОГА
+    # ---------------------------------------------------------
     def reload_dialog(self, dialog_id):
         entry = self.dialogs.get(dialog_id)
         if not entry:
@@ -191,7 +158,6 @@ class ResourceLoader:
 
         xml_path = entry["xml_path"]
 
-        # перечитываем XML
         try:
             tree = ET.parse(xml_path)
             root = tree.getroot()
@@ -199,7 +165,6 @@ class ResourceLoader:
             print(f"[ERROR] reload_dialog: cannot parse XML '{xml_path}': {e}")
             return False
 
-        # перечитываем строки файла
         try:
             with open(xml_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
@@ -207,24 +172,18 @@ class ResourceLoader:
             print(f"[ERROR] reload_dialog: cannot read lines: {e}")
             return False
 
-        # ищем <dialog id="...">
         dialog_node = root.find("dialog")
         if dialog_node is None:
             print(f"[ERROR] reload_dialog: <dialog> node missing in '{xml_path}'")
             return False
 
         dialog_id = dialog_node.get("id")
-        priority = int(dialog_node.get("priority", "0"))
 
-        # пересобираем line_map
         pre_lines = []
         has_lines = []
         dont_lines = []
-        priority_line = None
 
         for i, line in enumerate(lines):
-            if f'<dialog id="{dialog_id}"' in line:
-                priority_line = i
             if "<precondition>" in line and "<phrase" not in line:
                 pre_lines.append(i)
             if "<has_info>" in line and "<phrase" not in line:
@@ -232,16 +191,13 @@ class ResourceLoader:
             if "<dont_has_info>" in line and "<phrase" not in line:
                 dont_lines.append(i)
 
-        # обновляем запись
         self.dialogs[dialog_id] = {
             "id": dialog_id,
-            "priority": priority,
             "xml_path": xml_path,
             "xml_node": dialog_node,
             "xml_root": root,
             "lines": lines,
             "line_map": {
-                "priority": priority_line,
                 "pre": pre_lines,
                 "has": has_lines,
                 "dont": dont_lines,

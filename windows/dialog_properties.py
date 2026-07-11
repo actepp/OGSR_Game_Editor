@@ -34,12 +34,10 @@ class EditLine(QLineEdit):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     def keyPressEvent(self, event):
-        # ENTER → сохранить
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self.clearFocus()
             return
 
-        # ESC → отмена
         if event.key() == Qt.Key.Key_Escape:
             self.setText(self.label.text())
             self.dialog.cancel_edit()
@@ -108,9 +106,8 @@ class EditableLabel(QLabel):
         self.grid.addWidget(self, row, col)
         self.show()
 
-        # --- Проверка precondition после редактирования ---
+        # Проверка precondition
         if "preconditions" in self.dialog.dialog_data:
-            # выясняем индекс текущего precondition
             try:
                 idx = self.dialog.dialog_data["preconditions"].index(new_value)
                 exists = self.dialog.check_precondition(new_value)
@@ -155,9 +152,7 @@ class DialogProperties(QDialog):
 
         row = 0
 
-        # ---------------------------------------------------------
         # Имя диалога
-        # ---------------------------------------------------------
         name_label = QLabel(dialog_id)
         name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         name_label.setStyleSheet("""
@@ -173,9 +168,7 @@ class DialogProperties(QDialog):
         grid.addWidget(make_line(), row, 0, 1, 3)
         row += 1
 
-        # ---------------------------------------------------------
         # Путь к XML
-        # ---------------------------------------------------------
         xml_path = dialog_data["xml_path"].replace("\\", "/")
         grid.addWidget(QLabel("Путь:"), row, 0)
         grid.addWidget(make_vline(), row, 1)
@@ -189,25 +182,7 @@ class DialogProperties(QDialog):
         grid.addWidget(make_line(), row, 0, 1, 3)
         row += 1
 
-        # ---------------------------------------------------------
-        # Приоритет
-        # ---------------------------------------------------------
-        def commit_priority(val):
-            try:
-                self.dialog_data["priority"] = int(val)
-            except:
-                pass
-
-        grid.addWidget(QLabel("Приоритет:"), row, 0)
-        grid.addWidget(make_vline(), row, 1)
-        grid.addWidget(EditableLabel(str(dialog_data["priority"]), grid, commit_priority, self), row, 2)
-        row += 1
-        grid.addWidget(make_line(), row, 0, 1, 3)
-        row += 1
-
-        # ---------------------------------------------------------
         # Preconditions
-        # ---------------------------------------------------------
         if dialog_data["preconditions"]:
             def commit_pre(index, val):
                 self.dialog_data["preconditions"][index] = val.strip()
@@ -241,9 +216,7 @@ class DialogProperties(QDialog):
                 grid.addWidget(make_line(), row, 0, 1, 3)
                 row += 1
 
-        # ---------------------------------------------------------
         # Has Info
-        # ---------------------------------------------------------
         if dialog_data["has_info"]:
             def commit_hi(index, val):
                 self.dialog_data["has_info"][index] = val.strip()
@@ -265,9 +238,7 @@ class DialogProperties(QDialog):
                 grid.addWidget(make_line(), row, 0, 1, 3)
                 row += 1
 
-        # ---------------------------------------------------------
         # Dont Has Info
-        # ---------------------------------------------------------
         if dialog_data["dont_has_info"]:
             def commit_dhi(index, val):
                 self.dialog_data["dont_has_info"][index] = val.strip()
@@ -291,9 +262,7 @@ class DialogProperties(QDialog):
 
         main_layout.addStretch()
 
-        # ---------------------------------------------------------
         # Кнопки
-        # ---------------------------------------------------------
         btn_layout = QHBoxLayout()
         main_layout.addLayout(btn_layout)
 
@@ -338,14 +307,10 @@ class DialogProperties(QDialog):
         dialog_id = self.dialog_data["id"]
         loader.save_dialog(dialog_id, self.dialog_data)
 
-        # перечитать XML
         loader.reload_dialog(dialog_id)
-
-        # обновить UI конструктора
         dc.refresh_dialog(dialog_id)
 
         self.close()
-
 
     def showEvent(self, event):
         super().showEvent(event)
