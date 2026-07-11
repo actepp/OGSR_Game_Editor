@@ -126,3 +126,13 @@ class DialogConstructor(QWidget):
         else:
             # пробрасываем стандартное поведение
             QListWidget.keyPressEvent(self.dialog_list, event)
+
+    def refresh_dialog(self, dialog_id):
+        """
+        После сохранения диалога нужно просто перерисовать список.
+        Данные берутся из ResourceLoader при открытии свойств.
+        """
+        self.load_dialogs()   # перечитать список ID из loader
+        self.update_filter(self.search_box.text())  # сохранить фильтр
+
+        print(f"[OK] refresh_dialog: диалог {dialog_id} обновлён в UI.")

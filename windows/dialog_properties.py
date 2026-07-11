@@ -324,7 +324,14 @@ class DialogProperties(QDialog):
         dialog_id = self.dialog_data["id"]
         loader.save_dialog(dialog_id, self.dialog_data)
 
+        # перечитать XML
+        loader.reload_dialog(dialog_id)
+
+        # обновить UI конструктора
+        dc.refresh_dialog(dialog_id)
+
         self.close()
+
 
     def showEvent(self, event):
         super().showEvent(event)

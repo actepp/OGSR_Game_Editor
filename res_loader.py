@@ -182,3 +182,71 @@ class ResourceLoader:
             f.writelines(lines)
 
         print(f"[OK] Диалог {dialog_id} сохранён.")
+
+    def reload_dialog(self, dialog_id):
+        entry = self.dialogs.get(dialog_id)
+        if not entry:
+            print(f"[ERROR] reload_dialog: dialog '{dialog_id}' not found")
+            return False
+
+        xml_path = entry["xml_path"]
+
+        # перечитываем XML
+        try:
+            tree = ET.parse(xml_path)
+            root = tree.getroot()
+        except Exception as e:
+            print(f"[ERROR] reload_dialog: cannot parse XML '{xml_path}': {e}")
+            return False
+
+        # перечитываем строки файла
+        try:
+            with open(xml_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+        except Exception as e:
+            print(f"[ERROR] reload_dialog: cannot read lines: {e}")
+            return False
+
+        # ищем <dialog id="...">
+        dialog_node = root.find("dialog")
+        if dialog_node is None:
+            print(f"[ERROR] reload_dialog: <dialog> node missing in '{xml_path}'")
+            return False
+
+        dialog_id = dialog_node.get("id")
+        priority = int(dialog_node.get("priority", "0"))
+
+        # пересобираем line_map
+        pre_lines = []
+        has_lines = []
+        dont_lines = []
+        priority_line = None
+
+        for i, line in enumerate(lines):
+            if f'<dialog id="{dialog_id}"' in line:
+                priority_line = i
+            if "<precondition>" in line and "<phrase" not in line:
+                pre_lines.append(i)
+            if "<has_info>" in line and "<phrase" not in line:
+                has_lines.append(i)
+            if "<dont_has_info>" in line and "<phrase" not in line:
+                dont_lines.append(i)
+
+        # обновляем запись
+        self.dialogs[dialog_id] = {
+            "id": dialog_id,
+            "priority": priority,
+            "xml_path": xml_path,
+            "xml_node": dialog_node,
+            "xml_root": root,
+            "lines": lines,
+            "line_map": {
+                "priority": priority_line,
+                "pre": pre_lines,
+                "has": has_lines,
+                "dont": dont_lines,
+            }
+        }
+
+        print(f"[OK] Диалог {dialog_id} перезагружен из XML.")
+        return True
