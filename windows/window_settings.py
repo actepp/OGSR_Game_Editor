@@ -13,6 +13,15 @@ def normalize(path: str) -> str:
     return path.replace("\\", "/")
 
 
+REQUIRED_PATHS = [
+    "gamedata",
+    "configs",
+    "configs/gameplay",
+    "configs/creatures",
+    "spawns"
+]
+
+
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -70,6 +79,7 @@ class SettingsDialog(QDialog):
             return
 
         defaults = {
+            "configs": os.path.join(gamedata, "configs"),
             "configs/gameplay": os.path.join(gamedata, "configs", "gameplay"),
             "configs/creatures": os.path.join(gamedata, "configs", "creatures"),
             "configs/text": os.path.join(gamedata, "configs", "text"),
@@ -119,6 +129,7 @@ class SettingsDialog(QDialog):
 
         items = [
             ("gamedata", normalize(self.paths.get("gamedata", ""))),
+            ("configs", normalize(self.paths.get("configs", ""))),
             ("configs/gameplay", normalize(self.paths.get("configs/gameplay", ""))),
             ("configs/creatures", normalize(self.paths.get("configs/creatures", ""))),
             ("configs/text", normalize(self.paths.get("configs/text", ""))),
@@ -126,6 +137,7 @@ class SettingsDialog(QDialog):
         ]
 
         self.indicators = []
+        self.indicator_names = []
 
         for name, path in items:
             self._add_path_row(name, path)
@@ -204,7 +216,9 @@ class SettingsDialog(QDialog):
         icon = QLabel()
         icon.setFixedWidth(20)
 
-        if path and os.path.exists(path):
+        exists = path and os.path.exists(path)
+
+        if exists:
             icon.setText("✓")
             icon.setStyleSheet("color: green; font-weight: bold;")
         else:
@@ -212,6 +226,7 @@ class SettingsDialog(QDialog):
             icon.setStyleSheet("color: red; font-weight: bold;")
 
         self.indicators.append(icon)
+        self.indicator_names.append(name)
         row.addWidget(icon)
 
         lbl_name = QLabel(name)
@@ -223,10 +238,25 @@ class SettingsDialog(QDialog):
         row.addWidget(lbl_path)
 
         btn = QPushButton("Выбрать…")
-        btn.clicked.connect(lambda _, n=name, l=lbl_path: self.select_path(n, l))
-        row.addWidget(btn)
 
+        # gamedata — всегда выбираем вручную
+        if name == "gamedata":
+            btn.clicked.connect(lambda _, n=name, l=lbl_path: self.select_path(n, l))
+
+        # configs — НИКОГДА не выбираем вручную
+        elif name == "configs":
+            btn.setEnabled(False)
+
+        # остальные — выбираем только если отсутствуют
+        else:
+            if exists:
+                btn.setEnabled(False)
+            else:
+                btn.clicked.connect(lambda _, n=name, l=lbl_path: self.select_path(n, l))
+
+        row.addWidget(btn)
         self.content_layout.addLayout(row)
+
 
     # ---------------------------------------------------------
     # Выбор пути
@@ -237,6 +267,9 @@ class SettingsDialog(QDialog):
             norm = normalize(path)
             label_widget.setText(norm)
             self.paths[name] = norm
+
+            if name == "gamedata":
+                self.auto_scan_gamedata()
 
             self.change_category(0)
 
@@ -252,7 +285,13 @@ class SettingsDialog(QDialog):
     # Активация кнопки "Сохранить"
     # ---------------------------------------------------------
     def update_save_button_state(self):
-        has_errors = any(icon.text() == "✗" for icon in self.indicators)
+        has_errors = False
+
+        for name, icon in zip(self.indicator_names, self.indicators):
+            if name in REQUIRED_PATHS and icon.text() == "✗":
+                has_errors = True
+                break
+
         theme = self.settings.get("theme", "light")
 
         if has_errors:
@@ -286,12 +325,6 @@ class SettingsDialog(QDialog):
                     background-color: #45a049;
                 }
             """)
-
-    # ---------------------------------------------------------
-    # Динамическое обновление темы
-    # ---------------------------------------------------------
-    def refresh_theme(self):
-        self.update_save_button_state()
 
     # ---------------------------------------------------------
     # Очистка layout
