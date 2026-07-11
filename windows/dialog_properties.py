@@ -108,6 +108,20 @@ class EditableLabel(QLabel):
         self.grid.addWidget(self, row, col)
         self.show()
 
+        # --- Проверка precondition после редактирования ---
+        if "preconditions" in self.dialog.dialog_data:
+            # выясняем индекс текущего precondition
+            try:
+                idx = self.dialog.dialog_data["preconditions"].index(new_value)
+                exists = self.dialog.check_precondition(new_value)
+
+                if not exists:
+                    self.setStyleSheet("background-color: #330000; color: red; padding: 2px;")
+                else:
+                    self.setStyleSheet("padding: 2px;")
+            except:
+                pass
+
         self.dialog.active_editor = None
         self.dialog.active_label = None
 
