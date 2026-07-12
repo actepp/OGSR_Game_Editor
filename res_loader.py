@@ -185,20 +185,28 @@ class ResourceLoader:
             print("[SAVE] Применяем EDIT_BUFFER к XML")
 
             for pair in EDIT_BUFFER:
-                old = pair["old"]
-                new = pair["new"]
+                old_tag   = pair["old_tag"]
+                new_tag   = pair["new_tag"]
+                old_param = pair["old_param"]
+                new_param = pair["new_param"]
+
+                # Формируем старую и новую строки полностью
+                old_line = f"<{old_tag}>{old_param}</{old_tag}>"
+                new_line = f"<{new_tag}>{new_param}</{new_tag}>"
 
                 found = False
 
-                # замены только внутри диалога
+                # Ищем и заменяем ТОЛЬКО внутри диалога
                 for i in range(start, end + 1):
-                    if old in lines[i]:
-                        lines[i] = lines[i].replace(old, new)
+                    if old_line in lines[i]:
+                        print(f"[SAVE] Замена строки: {old_line} -> {new_line}")
+                        lines[i] = lines[i].replace(old_line, new_line)
                         found = True
 
                 if not found:
-                    print(f"[ERROR] OLD '{old}' не найден в диалоге — отмена сохранения")
+                    print(f"[ERROR] Строка '{old_line}' не найдена в диалоге — отмена сохранения")
                     return
+
 
         # --- ЭТАП 2: удаляем строки ТОЛЬКО внутри диалога ---
         new_lines = []

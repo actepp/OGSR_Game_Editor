@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QObject, QEvent
 
-EDIT_BUFFER = []   # [{ "old": "...", "new": "..." }]
+EDIT_BUFFER = []   
 
 def make_line():
     line = QFrame()
@@ -62,8 +62,9 @@ class ClickFilter(QObject):
 
 
 class EditableLabel(QLabel):
-    def __init__(self, text, grid_layout, on_commit, dialog):
+    def __init__(self, text, grid_layout, on_commit, dialog, tag):
         super().__init__(text)
+        self.tag = tag
         self.grid = grid_layout
         self.on_commit = on_commit
         self.dialog = dialog
@@ -105,35 +106,37 @@ class EditableLabel(QLabel):
 
     def finish_edit(self, editor):
         new_value = editor.text().strip()
-        old_value = editor.old_value  # ← теперь OLD всегда правильный
+        old_value = editor.old_value
+        tag = editor.label.tag
 
         if old_value != new_value:
 
             updated = False
 
-            # 1) Проверяем: это повторное редактирование?
-            #    Тогда old_value == предыдущему NEW
+            # --- Повторное редактирование ---
             for pair in EDIT_BUFFER:
-                if pair["new"] == old_value:
-                    print(f"[EDIT] Повторное редактирование: {pair['old']} -> {new_value}")
-                    pair["new"] = new_value
+                if pair["new_param"] == old_value and pair["old_tag"] == tag:
+                    print(f"[EDIT] Повторное редактирование: {pair['old_param']} -> {new_value}")
+                    pair["new_param"] = new_value
                     updated = True
                     break
 
-            # 2) Если нет — это первое редактирование этой строки
+            # --- Первое редактирование ---
             if not updated:
                 print(f"[EDIT] Новая запись: {old_value} -> {new_value}")
                 EDIT_BUFFER.append({
-                    "old": old_value,
-                    "new": new_value
+                    "old_tag": tag,
+                    "new_tag": tag,
+                    "old_param": old_value,
+                    "new_param": new_value
                 })
 
-            # Лог состояния буфера
             print("[BUFFER STATE]")
             for pair in EDIT_BUFFER:
-                print(f"   OLD: {pair['old']}  ->  NEW: {pair['new']}")
+                print(f"   TAG: {pair['old_tag']} -> {pair['new_tag']}, "
+                      f"PARAM: {pair['old_param']} -> {pair['new_param']}")
 
-        # --- стандартная логика обновления GUI ---
+        # --- обновление dialog_data через on_commit ---
         self.on_commit(new_value)
 
         index = self.grid.indexOf(editor)
@@ -146,20 +149,9 @@ class EditableLabel(QLabel):
         self.grid.addWidget(self, row, col)
         self.show()
 
-        if "preconditions" in self.dialog.dialog_data:
-            try:
-                idx = self.dialog.dialog_data["preconditions"].index(new_value)
-                exists = self.dialog.check_precondition(new_value)
-
-                if not exists:
-                    self.setStyleSheet("background-color: #330000; color: red; padding: 2px;")
-                else:
-                    self.setStyleSheet("padding: 2px;")
-            except:
-                pass
-
         self.dialog.active_editor = None
         self.dialog.active_label = None
+
 
 class DeleteButton(QPushButton):
     def __init__(self, on_delete):
@@ -251,8 +243,15 @@ class DialogProperties(QDialog):
         #  PRECONDITIONS
         # -------------------------
         if self.dialog_data["preconditions"]:
+
             def commit_pre(index, val):
-                self.dialog_data["preconditions"][index] = val.strip()
+                lst = self.dialog_data["preconditions"]
+                old = self.active_editor.old_value
+                try:
+                    real_index = lst.index(old)
+                    lst[real_index] = val.strip()
+                except ValueError:
+                    print(f"[COMMIT SKIPPED] precondition '{old}' уже удалён")
 
             for i, pre in enumerate(self.dialog_data["preconditions"]):
 
@@ -262,7 +261,7 @@ class DialogProperties(QDialog):
                 grid.addWidget(lbl_name, row, 0)
                 grid.addWidget(make_vline(), row, 1)
 
-                lbl = EditableLabel(pre, grid, lambda v, idx=i: commit_pre(idx, v), self)
+                lbl = EditableLabel(pre, grid, lambda v, idx=i: commit_pre(idx, v), self, "precondition")
 
                 if not exists:
                     lbl_name.setStyleSheet("color: red; font-weight: bold;")
@@ -271,8 +270,21 @@ class DialogProperties(QDialog):
                     lbl.setStyleSheet("padding: 2px;")
 
                 def delete_pre(i=i, lbl_name=lbl_name, lbl=lbl, value=pre):
-                    if self.active_editor is not None:
-                        self.finish_edit_external()
+
+                    # >>> NEW: если строка была в режиме редактирования — убираем редактор вручную
+                    if self.active_editor is not None and self.active_label is lbl:
+                        editor = self.active_editor
+
+                        idx = self.grid.indexOf(editor)
+                        if idx >= 0:
+                            row_e, col_e, _, _ = self.grid.getItemPosition(idx)
+                            self.grid.removeWidget(editor)
+
+                        editor.deleteLater()
+
+                        self.active_editor = None
+                        self.active_label = None
+                    # <<< END NEW BLOCK
 
                     del_btn = self.sender()
                     line_text = f"<precondition>{value}</precondition>"
@@ -286,7 +298,10 @@ class DialogProperties(QDialog):
 
                     EDIT_BUFFER[:] = [
                         pair for pair in EDIT_BUFFER
-                        if pair["old"] != value and pair["new"] != value
+                        if not (
+                            pair["old_param"] == value or
+                            pair["new_param"] == value
+                        )
                     ]
 
                     print(f"[DELETE] Удалили '{value}'")
@@ -300,12 +315,20 @@ class DialogProperties(QDialog):
                 grid.addWidget(make_line(), row, 0, 1, 4)
                 row += 1
 
+
         # -------------------------
         #  HAS INFO
         # -------------------------
         if self.dialog_data["has_info"]:
+
             def commit_hi(index, val):
-                self.dialog_data["has_info"][index] = val.strip()
+                lst = self.dialog_data["has_info"]
+                old = self.active_editor.old_value
+                try:
+                    real_index = lst.index(old)
+                    lst[real_index] = val.strip()
+                except ValueError:
+                    print(f"[COMMIT SKIPPED] has_info '{old}' уже удалён")
 
             for i, hi in enumerate(self.dialog_data["has_info"]):
 
@@ -313,11 +336,24 @@ class DialogProperties(QDialog):
                 grid.addWidget(lbl_name, row, 0)
                 grid.addWidget(make_vline(), row, 1)
 
-                lbl = EditableLabel(hi, grid, lambda v, idx=i: commit_hi(idx, v), self)
+                lbl = EditableLabel(hi, grid, lambda v, idx=i: commit_hi(idx, v), self, "has_info")
 
                 def delete_hi(i=i, lbl_name=lbl_name, lbl=lbl, value=hi):
-                    if self.active_editor is not None:
-                        self.finish_edit_external()
+
+                    # >>> NEW: если строка была в режиме редактирования — убираем редактор вручную
+                    if self.active_editor is not None and self.active_label is lbl:
+                        editor = self.active_editor
+
+                        idx = self.grid.indexOf(editor)
+                        if idx >= 0:
+                            row_e, col_e, _, _ = self.grid.getItemPosition(idx)
+                            self.grid.removeWidget(editor)
+
+                        editor.deleteLater()
+
+                        self.active_editor = None
+                        self.active_label = None
+                    # <<< END NEW BLOCK
 
                     del_btn = self.sender()
                     line_text = f"<has_info>{value}</has_info>"
@@ -331,7 +367,10 @@ class DialogProperties(QDialog):
 
                     EDIT_BUFFER[:] = [
                         pair for pair in EDIT_BUFFER
-                        if pair["old"] != value and pair["new"] != value
+                        if not (
+                            pair["old_param"] == value or
+                            pair["new_param"] == value
+                        )
                     ]
 
                     print(f"[DELETE] Удалили '{value}'")
@@ -345,12 +384,20 @@ class DialogProperties(QDialog):
                 grid.addWidget(make_line(), row, 0, 1, 4)
                 row += 1
 
+
         # -------------------------
         #  DONT HAS INFO
         # -------------------------
         if self.dialog_data["dont_has_info"]:
+
             def commit_dhi(index, val):
-                self.dialog_data["dont_has_info"][index] = val.strip()
+                lst = self.dialog_data["dont_has_info"]
+                old = self.active_editor.old_value
+                try:
+                    real_index = lst.index(old)
+                    lst[real_index] = val.strip()
+                except ValueError:
+                    print(f"[COMMIT SKIPPED] dont_has_info '{old}' уже удалён")
 
             for i, dhi in enumerate(self.dialog_data["dont_has_info"]):
 
@@ -358,11 +405,24 @@ class DialogProperties(QDialog):
                 grid.addWidget(lbl_name, row, 0)
                 grid.addWidget(make_vline(), row, 1)
 
-                lbl = EditableLabel(dhi, grid, lambda v, idx=i: commit_dhi(idx, v), self)
+                lbl = EditableLabel(dhi, grid, lambda v, idx=i: commit_dhi(idx, v), self, "dont_has_info")
 
                 def delete_dhi(i=i, lbl_name=lbl_name, lbl=lbl, value=dhi):
-                    if self.active_editor is not None:
-                        self.finish_edit_external()
+
+                    # >>> NEW: если строка была в режиме редактирования — убираем редактор вручную
+                    if self.active_editor is not None and self.active_label is lbl:
+                        editor = self.active_editor
+
+                        idx = self.grid.indexOf(editor)
+                        if idx >= 0:
+                            row_e, col_e, _, _ = self.grid.getItemPosition(idx)
+                            self.grid.removeWidget(editor)
+
+                        editor.deleteLater()
+
+                        self.active_editor = None
+                        self.active_label = None
+                    # <<< END NEW BLOCK
 
                     del_btn = self.sender()
                     line_text = f"<dont_has_info>{value}</dont_has_info>"
@@ -376,7 +436,10 @@ class DialogProperties(QDialog):
 
                     EDIT_BUFFER[:] = [
                         pair for pair in EDIT_BUFFER
-                        if pair["old"] != value and pair["new"] != value
+                        if not (
+                            pair["old_param"] == value or
+                            pair["new_param"] == value
+                        )
                     ]
 
                     print(f"[DELETE] Удалили '{value}'")
@@ -390,6 +453,7 @@ class DialogProperties(QDialog):
                 grid.addWidget(make_line(), row, 0, 1, 4)
                 row += 1
 
+
         # -------------------------
         #  UNIVERSAL GREEN PLUS
         # -------------------------
@@ -398,7 +462,6 @@ class DialogProperties(QDialog):
 
             new_value = "new_param"
 
-            # Добавляем в preconditions (универсально)
             self.dialog_data["preconditions"].append(new_value)
 
             self.close()
@@ -548,6 +611,7 @@ class DialogProperties(QDialog):
             print(f"ERROR: function {func} not found in {target_file}")
 
         return found
+
 
 
 class AddButton(QPushButton):
