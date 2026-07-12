@@ -186,23 +186,20 @@ class DialogProperties(QDialog):
     def __init__(self, parent, dialog_data):
         super().__init__(parent)
 
-        # ID диалога из переданных данных
         dialog_id = dialog_data["id"]
 
         self.active_editor = None
         self.active_label = None
 
-        # доступ к loader и dialog_id
         dc = self.parent()
         mw = dc.parent()
         self.loader = mw.res_loader
         self.dialog_id = dialog_id
 
-        # ПЕРЕЧИТЫВАЕМ ДИАЛОГ ИЗ ФАЙЛА, БЕРЁМ СВЕЖИЕ ДАННЫЕ
+        # Перечитываем диалог
         self.loader.reload_dialog(dialog_id)
         self.dialog_data = self.loader.get_dialog(dialog_id)
 
-        # список строк, которые надо удалить из XML (по тексту)
         self.dialog_data["_delete_lines"] = []
 
         self.setWindowTitle(f"Свойства {dialog_id}")
@@ -225,16 +222,11 @@ class DialogProperties(QDialog):
 
         row = 0
 
-        # Имя диалога
+        # Заголовок
         name_label = QLabel(dialog_id)
         name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        name_label.setStyleSheet("""
-            font-size: 16px;
-            font-weight: bold;
-            padding: 6px;
-        """)
+        name_label.setStyleSheet("font-size: 16px; font-weight: bold; padding: 6px;")
         name_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-
         grid.addWidget(name_label, row, 0, 1, 4)
         row += 1
 
@@ -250,12 +242,14 @@ class DialogProperties(QDialog):
         lbl_xml.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         lbl_xml.setStyleSheet("color: #ccc;")
         grid.addWidget(lbl_xml, row, 2, 1, 2)
-
         row += 1
+
         grid.addWidget(make_line(), row, 0, 1, 4)
         row += 1
 
-        # Preconditions
+        # -------------------------
+        #  PRECONDITIONS
+        # -------------------------
         if self.dialog_data["preconditions"]:
             def commit_pre(index, val):
                 self.dialog_data["preconditions"][index] = val.strip()
@@ -268,18 +262,12 @@ class DialogProperties(QDialog):
                 grid.addWidget(lbl_name, row, 0)
                 grid.addWidget(make_vline(), row, 1)
 
-                lbl = EditableLabel(
-                    pre,
-                    grid,
-                    lambda v, idx=i: commit_pre(idx, v),
-                    self
-                )
+                lbl = EditableLabel(pre, grid, lambda v, idx=i: commit_pre(idx, v), self)
 
                 if not exists:
                     lbl_name.setStyleSheet("color: red; font-weight: bold;")
                     lbl.setStyleSheet("background-color: #330000; color: red; padding: 2px;")
                 else:
-                    lbl_name.setStyleSheet("")
                     lbl.setStyleSheet("padding: 2px;")
 
                 def delete_pre(i=i, lbl_name=lbl_name, lbl=lbl, value=pre):
@@ -287,7 +275,6 @@ class DialogProperties(QDialog):
                         self.finish_edit_external()
 
                     del_btn = self.sender()
-
                     line_text = f"<precondition>{value}</precondition>"
                     self.dialog_data["_delete_lines"].append(line_text)
 
@@ -296,15 +283,13 @@ class DialogProperties(QDialog):
                     lbl.setParent(None)
                     del_btn.setParent(None)
                     lbl_name.setParent(None)
-                    before = len(EDIT_BUFFER)
+
                     EDIT_BUFFER[:] = [
                         pair for pair in EDIT_BUFFER
                         if pair["old"] != value and pair["new"] != value
                     ]
-                    after = len(EDIT_BUFFER)
 
-                    print(f"[DELETE] Удалили '{value}', буфер: {before} -> {after}")
-
+                    print(f"[DELETE] Удалили '{value}'")
 
                 del_btn = DeleteButton(delete_pre)
 
@@ -315,7 +300,9 @@ class DialogProperties(QDialog):
                 grid.addWidget(make_line(), row, 0, 1, 4)
                 row += 1
 
-        # Has Info
+        # -------------------------
+        #  HAS INFO
+        # -------------------------
         if self.dialog_data["has_info"]:
             def commit_hi(index, val):
                 self.dialog_data["has_info"][index] = val.strip()
@@ -326,18 +313,13 @@ class DialogProperties(QDialog):
                 grid.addWidget(lbl_name, row, 0)
                 grid.addWidget(make_vline(), row, 1)
 
-                lbl = EditableLabel(
-                    hi,
-                    grid,
-                    lambda v, idx=i: commit_hi(idx, v),
-                    self
-                )
+                lbl = EditableLabel(hi, grid, lambda v, idx=i: commit_hi(idx, v), self)
 
                 def delete_hi(i=i, lbl_name=lbl_name, lbl=lbl, value=hi):
                     if self.active_editor is not None:
                         self.finish_edit_external()
-                    del_btn = self.sender()  # кнопка, по которой нажали
 
+                    del_btn = self.sender()
                     line_text = f"<has_info>{value}</has_info>"
                     self.dialog_data["_delete_lines"].append(line_text)
 
@@ -346,15 +328,13 @@ class DialogProperties(QDialog):
                     lbl.setParent(None)
                     del_btn.setParent(None)
                     lbl_name.setParent(None)
-                    before = len(EDIT_BUFFER)
+
                     EDIT_BUFFER[:] = [
                         pair for pair in EDIT_BUFFER
                         if pair["old"] != value and pair["new"] != value
                     ]
-                    after = len(EDIT_BUFFER)
 
-                    print(f"[DELETE] Удалили '{value}', буфер: {before} -> {after}")
-
+                    print(f"[DELETE] Удалили '{value}'")
 
                 del_btn = DeleteButton(delete_hi)
 
@@ -365,7 +345,9 @@ class DialogProperties(QDialog):
                 grid.addWidget(make_line(), row, 0, 1, 4)
                 row += 1
 
-        # Dont Has Info
+        # -------------------------
+        #  DONT HAS INFO
+        # -------------------------
         if self.dialog_data["dont_has_info"]:
             def commit_dhi(index, val):
                 self.dialog_data["dont_has_info"][index] = val.strip()
@@ -376,18 +358,13 @@ class DialogProperties(QDialog):
                 grid.addWidget(lbl_name, row, 0)
                 grid.addWidget(make_vline(), row, 1)
 
-                lbl = EditableLabel(
-                    dhi,
-                    grid,
-                    lambda v, idx=i: commit_dhi(idx, v),
-                    self
-                )
+                lbl = EditableLabel(dhi, grid, lambda v, idx=i: commit_dhi(idx, v), self)
 
                 def delete_dhi(i=i, lbl_name=lbl_name, lbl=lbl, value=dhi):
                     if self.active_editor is not None:
                         self.finish_edit_external()
-                    del_btn = self.sender()
 
+                    del_btn = self.sender()
                     line_text = f"<dont_has_info>{value}</dont_has_info>"
                     self.dialog_data["_delete_lines"].append(line_text)
 
@@ -396,14 +373,13 @@ class DialogProperties(QDialog):
                     lbl.setParent(None)
                     del_btn.setParent(None)
                     lbl_name.setParent(None)
-                    before = len(EDIT_BUFFER)
+
                     EDIT_BUFFER[:] = [
                         pair for pair in EDIT_BUFFER
                         if pair["old"] != value and pair["new"] != value
                     ]
-                    after = len(EDIT_BUFFER)
 
-                    print(f"[DELETE] Удалили '{value}', буфер: {before} -> {after}")
+                    print(f"[DELETE] Удалили '{value}'")
 
                 del_btn = DeleteButton(delete_dhi)
 
@@ -414,6 +390,27 @@ class DialogProperties(QDialog):
                 grid.addWidget(make_line(), row, 0, 1, 4)
                 row += 1
 
+        # -------------------------
+        #  UNIVERSAL GREEN PLUS
+        # -------------------------
+        def add_new_param():
+            print("[ADD] Добавляем новый параметр")
+
+            new_value = "new_param"
+
+            # Добавляем в preconditions (универсально)
+            self.dialog_data["preconditions"].append(new_value)
+
+            self.close()
+            DialogProperties(self.parent(), self.dialog_data).show()
+
+        add_btn = AddButton(add_new_param)
+        grid.addWidget(add_btn, row, 3)
+        row += 1
+
+        # -------------------------
+        #  BUTTONS
+        # -------------------------
         main_layout.addStretch()
 
         btn_layout = QHBoxLayout()
@@ -423,6 +420,7 @@ class DialogProperties(QDialog):
         btn_cancel = QPushButton("Отмена")
 
         btn_save.clicked.connect(self.save_dialog)
+
         def cancel_all():
             print("[CANCEL] Полная очистка буфера")
             EDIT_BUFFER.clear()
@@ -430,20 +428,28 @@ class DialogProperties(QDialog):
 
         btn_cancel.clicked.connect(cancel_all)
 
-
         btn_layout.addStretch()
         btn_layout.addWidget(btn_save)
         btn_layout.addWidget(btn_cancel)
 
-    def finish_edit_external(self):
-        if self.active_editor is not None:
-            self.active_editor.clearFocus()
-
+    # -------------------------
+    #  CLOSE EVENT
+    # -------------------------
     def closeEvent(self, event):
         print("[CLOSE] Окно закрыто, очищаем буфер")
         EDIT_BUFFER.clear()
         super().closeEvent(event)
 
+    # -------------------------
+    #  FINISH EDIT EXTERNAL
+    # -------------------------
+    def finish_edit_external(self):
+        if self.active_editor is not None:
+            self.active_editor.clearFocus()
+
+    # -------------------------
+    #  CANCEL EDIT
+    # -------------------------
     def cancel_edit(self):
         editor = self.active_editor
         label = self.active_label
@@ -463,6 +469,9 @@ class DialogProperties(QDialog):
         self.active_editor = None
         self.active_label = None
 
+    # -------------------------
+    #  SAVE DIALOG
+    # -------------------------
     def save_dialog(self):
         dc = self.parent()
         mw = dc.parent()
@@ -470,53 +479,17 @@ class DialogProperties(QDialog):
 
         dialog_id = self.dialog_data["id"]
 
-        # ---------- ЭТАП 1: применяем EDIT_BUFFER к XML ----------
-
-        xml_path = self.dialog_data["xml_path"].replace("\\", "/")
-
-        try:
-            with open(xml_path, "r", encoding="utf-8") as f:
-                xml_content = f.read()
-        except UnicodeDecodeError:
-            with open(xml_path, "r", encoding="cp1251") as f:
-                xml_content = f.read()
-
-        # Если буфер пустой — просто идём дальше
-        if EDIT_BUFFER:
-            print("[SAVE] Применяем буфер изменений к XML")
-            for pair in EDIT_BUFFER:
-                old = pair["old"]
-                new = pair["new"]
-
-                if old == new:
-                    continue
-
-                if old not in xml_content:
-                    print(f"[ERROR] В XML не найден OLD '{old}' для замены на '{new}'")
-                    # Жёстко вылетаем, ничего не сохраняем
-                    return
-
-                print(f"[SAVE] Замена в XML: {old} -> {new}")
-                xml_content = xml_content.replace(old, new)
-
-            # Записываем обновлённый XML обратно
-            try:
-                with open(xml_path, "w", encoding="utf-8") as f:
-                    f.write(xml_content)
-            except UnicodeEncodeError:
-                with open(xml_path, "w", encoding="cp1251") as f:
-                    f.write(xml_content)
-
-        # ---------- ЭТАП 2: твой текущий механизм сохранения ----------
-
         loader.save_dialog(dialog_id, self.dialog_data)
         loader.reload_dialog(dialog_id)
         dc.refresh_dialog(dialog_id)
+
+        print("[SAVE] Диалог сохранён, очищаем буфер")
         EDIT_BUFFER.clear()
-        print("[SAVE] Диалог сохранён, буфер  очищаем ")
         self.close()
 
-
+    # -------------------------
+    #  CENTER WINDOW
+    # -------------------------
     def showEvent(self, event):
         super().showEvent(event)
         self.center_on_screen()
@@ -527,6 +500,9 @@ class DialogProperties(QDialog):
         y = screen.y() + (screen.height() - self.height()) // 2
         self.move(x, y)
 
+    # -------------------------
+    #  CHECK PRECONDITION
+    # -------------------------
     def check_precondition(self, precondition: str) -> bool:
         if "." not in precondition:
             return False
@@ -572,3 +548,24 @@ class DialogProperties(QDialog):
             print(f"ERROR: function {func} not found in {target_file}")
 
         return found
+
+
+class AddButton(QPushButton):
+    def __init__(self, on_add):
+        super().__init__("+")
+        self.on_add = on_add
+
+        self.setFixedWidth(30)
+        self.setStyleSheet("""
+            QPushButton {
+                background-color: #008800;
+                color: white;
+                font-weight: bold;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #00aa00;
+            }
+        """)
+
+        self.clicked.connect(self.on_add)
