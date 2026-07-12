@@ -3,11 +3,21 @@ import re
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QPushButton,
-    QHBoxLayout, QGridLayout, QFrame, QLineEdit, QWidget, QSizePolicy
+    QHBoxLayout, QGridLayout, QFrame, QLineEdit,
+    QWidget, QSizePolicy, QComboBox
 )
 from PyQt6.QtCore import Qt, QObject, QEvent
 
+# Глобальный буфер изменений:
+# каждая запись: {old_tag, new_tag, old_param, new_param}
 EDIT_BUFFER = []
+
+# Доступные теги: GUI-имя -> XML-имя
+TAG_MAP = {
+    "Precondition": "precondition",
+    "Has Info": "has_info",
+    "Dont Has Info": "dont_has_info"
+}
 
 
 def make_line():
@@ -62,6 +72,61 @@ class ClickFilter(QObject):
         return False
 
 
+class TagCombo(QComboBox):
+    def __init__(self, dialog, current_xml_tag, param_value):
+        super().__init__()
+        self.dialog = dialog
+        self.param_value = param_value
+
+        gui_tag = None
+        for k, v in TAG_MAP.items():
+            if v == current_xml_tag:
+                gui_tag = k
+                break
+        if gui_tag is None:
+            gui_tag = list(TAG_MAP.keys())[0]
+
+        self.original_xml_tag = current_xml_tag
+        self.old_gui_tag = gui_tag
+
+        self.addItems(TAG_MAP.keys())
+        self.setCurrentText(gui_tag)
+
+        self.currentIndexChanged.connect(self.on_change)
+
+    def on_change(self):
+        new_gui_tag = self.currentText()
+        new_xml = TAG_MAP[new_gui_tag]
+
+        # Если тег вернулся к исходному — очищаем буфер по этому параметру
+        if new_xml == self.original_xml_tag:
+            EDIT_BUFFER[:] = [
+                p for p in EDIT_BUFFER
+                if not (p["old_param"] == self.param_value)
+            ]
+            self.old_gui_tag = new_gui_tag
+            return
+
+        old_xml = TAG_MAP[self.old_gui_tag]
+
+        updated = False
+        for pair in EDIT_BUFFER:
+            if pair["old_param"] == self.param_value:
+                pair["new_tag"] = new_xml
+                updated = True
+                break
+
+        if not updated:
+            EDIT_BUFFER.append({
+                "old_tag": old_xml,
+                "new_tag": new_xml,
+                "old_param": self.param_value,
+                "new_param": self.param_value
+            })
+
+        self.old_gui_tag = new_gui_tag
+
+
 class EditableLabel(QLabel):
     def __init__(self, text, grid_layout, on_commit, dialog, tag):
         super().__init__(text)
@@ -106,7 +171,7 @@ class EditableLabel(QLabel):
             updated = False
 
             for pair in EDIT_BUFFER:
-                if pair["new_param"] == old_value and pair["old_tag"] == tag:
+                if pair["old_param"] == old_value and pair["old_tag"] == tag:
                     pair["new_param"] = new_value
                     updated = True
                     break
@@ -216,7 +281,6 @@ class DialogProperties(QDialog):
         row = 0
         self.current_row = row
 
-        # Заголовок
         name_label = QLabel(dialog_id)
         name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         name_label.setStyleSheet("font-size: 16px; font-weight: bold; padding: 6px;")
@@ -227,7 +291,6 @@ class DialogProperties(QDialog):
         grid.addWidget(make_line(), row, 0, 1, 4)
         row += 1
 
-        # Путь к XML
         xml_path = self.dialog_data["xml_path"].replace("\\", "/")
         grid.addWidget(QLabel("Путь:"), row, 0)
         grid.addWidget(make_vline(), row, 1)
@@ -243,29 +306,24 @@ class DialogProperties(QDialog):
 
         self.current_row = row
 
-        # --- Унифицированные секции ---
         self.render_section(
             section_name="preconditions",
-            title="Precondition:",
-            tag="precondition",
+            xml_tag="precondition",
             commit_func=self.commit_pre,
         )
 
         self.render_section(
             section_name="has_info",
-            title="Has Info:",
-            tag="has_info",
+            xml_tag="has_info",
             commit_func=self.commit_hi,
         )
 
         self.render_section(
             section_name="dont_has_info",
-            title="Dont Has Info:",
-            tag="dont_has_info",
+            xml_tag="dont_has_info",
             commit_func=self.commit_dhi,
         )
 
-        # Кнопка добавления
         add_btn = AddButton(self.add_new_param)
         grid.addWidget(add_btn, self.current_row, 3)
         self.current_row += 1
@@ -290,10 +348,7 @@ class DialogProperties(QDialog):
         btn_layout.addWidget(btn_save)
         btn_layout.addWidget(btn_cancel)
 
-    # -------------------------
-    #  Универсальный рендер секции
-    # -------------------------
-    def render_section(self, section_name, title, tag, commit_func):
+    def render_section(self, section_name, xml_tag, commit_func):
         lst = self.dialog_data.get(section_name)
         if not lst:
             return
@@ -303,8 +358,8 @@ class DialogProperties(QDialog):
 
         for i, value in enumerate(lst):
 
-            lbl_name = QLabel(title)
-            grid.addWidget(lbl_name, row, 0)
+            combo = TagCombo(self, xml_tag, value)
+            grid.addWidget(combo, row, 0)
             grid.addWidget(make_vline(), row, 1)
 
             lbl = EditableLabel(
@@ -312,10 +367,10 @@ class DialogProperties(QDialog):
                 grid,
                 lambda v, idx=i: commit_func(idx, v),
                 self,
-                tag
+                xml_tag
             )
 
-            def delete_item(i=i, lbl_name=lbl_name, lbl=lbl, value=value):
+            def delete_item(i=i, combo=combo, lbl=lbl, value=value):
                 if self.active_editor is not None and self.active_label is lbl:
                     editor = self.active_editor
                     idx = grid.indexOf(editor)
@@ -327,20 +382,33 @@ class DialogProperties(QDialog):
                     self.active_label = None
 
                 del_btn = self.sender()
-                line_text = f"<{tag}>{value}</{tag}>"
+
+                pair = next(
+                    (p for p in EDIT_BUFFER if p["old_param"] == value),
+                    None
+                )
+
+                if pair:
+                    tag_for_delete = pair["old_tag"]
+                    param_for_delete = pair["old_param"]
+                else:
+                    tag_for_delete = xml_tag
+                    param_for_delete = value
+
+                line_text = f"<{tag_for_delete}>{param_for_delete}</{tag_for_delete}>"
                 self.dialog_data["_delete_lines"].append(line_text)
 
                 lst.pop(i)
 
+                combo.setParent(None)
                 lbl.setParent(None)
                 del_btn.setParent(None)
-                lbl_name.setParent(None)
 
                 EDIT_BUFFER[:] = [
-                    pair for pair in EDIT_BUFFER
+                    p for p in EDIT_BUFFER
                     if not (
-                        pair["old_param"] == value or
-                        pair["new_param"] == value
+                        p["old_param"] == value or
+                        p["new_param"] == value
                     )
                 ]
 
@@ -355,9 +423,6 @@ class DialogProperties(QDialog):
 
         self.current_row = row
 
-    # -------------------------
-    #  COMMIT handlers
-    # -------------------------
     def commit_pre(self, index, val):
         lst = self.dialog_data["preconditions"]
         old = self.active_editor.old_value
@@ -385,18 +450,12 @@ class DialogProperties(QDialog):
         except ValueError:
             pass
 
-    # -------------------------
-    #  ADD NEW PARAM
-    # -------------------------
     def add_new_param(self):
         new_value = "new_param"
         self.dialog_data["preconditions"].append(new_value)
         self.close()
         DialogProperties(self.parent(), self.dialog_data).show()
 
-    # -------------------------
-    #  SAVE
-    # -------------------------
     def save_dialog(self):
         dc = self.parent()
         mw = dc.parent()
@@ -411,9 +470,6 @@ class DialogProperties(QDialog):
         EDIT_BUFFER.clear()
         self.close()
 
-    # -------------------------
-    #  CANCEL EDIT
-    # -------------------------
     def cancel_edit(self):
         editor = self.active_editor
         label = self.active_label
