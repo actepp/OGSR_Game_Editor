@@ -439,6 +439,11 @@ class DialogProperties(QDialog):
         if self.active_editor is not None:
             self.active_editor.clearFocus()
 
+    def closeEvent(self, event):
+        print("[CLOSE] Окно закрыто, очищаем буфер")
+        EDIT_BUFFER.clear()
+        super().closeEvent(event)
+
     def cancel_edit(self):
         editor = self.active_editor
         label = self.active_label
@@ -507,8 +512,8 @@ class DialogProperties(QDialog):
         loader.save_dialog(dialog_id, self.dialog_data)
         loader.reload_dialog(dialog_id)
         dc.refresh_dialog(dialog_id)
-
-        print("[SAVE] Диалог сохранён, буфер изменений НЕ очищаем (на твой выбор)")
+        EDIT_BUFFER.clear()
+        print("[SAVE] Диалог сохранён, буфер  очищаем ")
         self.close()
 
 
