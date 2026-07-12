@@ -76,7 +76,9 @@ class TagCombo(QComboBox):
     def __init__(self, dialog, current_xml_tag, param_value):
         super().__init__()
         self.dialog = dialog
-        self.param_value = param_value
+
+        # param_value — это ОРИГИНАЛЬНЫЙ XML-параметр для этой строки
+        self.original_param = param_value
 
         gui_tag = None
         for k, v in TAG_MAP.items():
@@ -86,7 +88,9 @@ class TagCombo(QComboBox):
         if gui_tag is None:
             gui_tag = list(TAG_MAP.keys())[0]
 
+        # Оригинальный XML-тег (из файла)
         self.original_xml_tag = current_xml_tag
+        # Последний выбранный GUI-тег
         self.old_gui_tag = gui_tag
 
         self.addItems(TAG_MAP.keys())
@@ -97,31 +101,35 @@ class TagCombo(QComboBox):
     def on_change(self):
         new_gui_tag = self.currentText()
         new_xml = TAG_MAP[new_gui_tag]
+        old_xml = TAG_MAP[self.old_gui_tag]
 
-        # Если тег вернулся к исходному — очищаем буфер по этому параметру
+        # Ищем запись в буфере по ОРИГИНАЛЬНОМУ XML-параметру
+        pair = None
+        for p in EDIT_BUFFER:
+            if p["old_param"] == self.original_param:
+                pair = p
+                break
+
+        # Если тег вернулся к исходному — просто сбрасываем new_tag в оригинальный
         if new_xml == self.original_xml_tag:
-            EDIT_BUFFER[:] = [
-                p for p in EDIT_BUFFER
-                if not (p["old_param"] == self.param_value)
-            ]
+            if pair is not None:
+                pair["new_tag"] = self.original_xml_tag
+                # Если вообще никаких изменений (тег и параметр совпадают с оригиналом) — можно удалить запись
+                if pair["new_tag"] == pair["old_tag"] and pair["new_param"] == pair["old_param"]:
+                    EDIT_BUFFER.remove(pair)
             self.old_gui_tag = new_gui_tag
             return
 
-        old_xml = TAG_MAP[self.old_gui_tag]
-
-        updated = False
-        for pair in EDIT_BUFFER:
-            if pair["old_param"] == self.param_value:
-                pair["new_tag"] = new_xml
-                updated = True
-                break
-
-        if not updated:
+        # Если запись уже есть — обновляем только new_tag
+        if pair is not None:
+            pair["new_tag"] = new_xml
+        else:
+            # Создаём новую запись: old_tag/old_param — всегда из XML
             EDIT_BUFFER.append({
-                "old_tag": old_xml,
+                "old_tag": self.original_xml_tag,
                 "new_tag": new_xml,
-                "old_param": self.param_value,
-                "new_param": self.param_value
+                "old_param": self.original_param,
+                "new_param": self.original_param
             })
 
         self.old_gui_tag = new_gui_tag
@@ -136,6 +144,9 @@ class EditableLabel(QLabel):
         self.dialog = dialog
         self.setStyleSheet("padding: 2px;")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        # ОРИГИНАЛЬНЫЙ XML-параметр для этой строки
+        self.original_param = text
 
     def mousePressEvent(self, event):
         if self.dialog.active_editor is not None:
@@ -164,26 +175,33 @@ class EditableLabel(QLabel):
 
     def finish_edit(self, editor):
         new_value = editor.text().strip()
-        old_value = editor.old_value
-        tag = editor.label.tag
+        old_value = editor.old_value  # предыдущее GUI-значение, чисто для сравнения
+        tag = self.tag
+
+        # Ключ для буфера — ОРИГИНАЛЬНЫЙ XML-параметр
+        xml_key = self.original_param
 
         if old_value != new_value:
-            updated = False
-
-            for pair in EDIT_BUFFER:
-                if pair["old_param"] == old_value and pair["old_tag"] == tag:
-                    pair["new_param"] = new_value
-                    updated = True
+            # Ищем запись по old_param == ОРИГИНАЛЬНОМУ XML-параметру
+            pair = None
+            for p in EDIT_BUFFER:
+                if p["old_param"] == xml_key:
+                    pair = p
                     break
 
-            if not updated:
+            if pair is not None:
+                # Обновляем только new_param
+                pair["new_param"] = new_value
+            else:
+                # Создаём новую запись: old_tag/old_param — всегда из XML
                 EDIT_BUFFER.append({
                     "old_tag": tag,
                     "new_tag": tag,
-                    "old_param": old_value,
+                    "old_param": xml_key,
                     "new_param": new_value
                 })
 
+        # Обновляем внутренние данные диалога (GUI-список)
         self.on_commit(new_value)
 
         index = self.grid.indexOf(editor)
@@ -384,7 +402,7 @@ class DialogProperties(QDialog):
                 del_btn = self.sender()
 
                 pair = next(
-                    (p for p in EDIT_BUFFER if p["old_param"] == value),
+                    (p for p in EDIT_BUFFER if p["old_param"] == lbl.original_param),
                     None
                 )
 
@@ -407,8 +425,8 @@ class DialogProperties(QDialog):
                 EDIT_BUFFER[:] = [
                     p for p in EDIT_BUFFER
                     if not (
-                        p["old_param"] == value or
-                        p["new_param"] == value
+                        p["old_param"] == lbl.original_param or
+                        p["new_param"] == lbl.original_param
                     )
                 ]
 
