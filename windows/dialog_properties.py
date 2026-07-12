@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QObject, QEvent
 
+EDIT_BUFFER = []   # [{ "old": "...", "new": "..." }]
 
 def make_line():
     line = QFrame()
@@ -70,7 +71,13 @@ class EditableLabel(QLabel):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def mousePressEvent(self, event):
+        # Если есть активный редактор — сначала завершаем его
+        if self.dialog.active_editor is not None:
+            self.dialog.finish_edit_external()
+            #return  # предотвращаем запуск start_edit в этот же момент
+
         self.start_edit()
+
 
     def start_edit(self):
         index = self.grid.indexOf(self)
@@ -80,6 +87,10 @@ class EditableLabel(QLabel):
         row, col, _, _ = self.grid.getItemPosition(index)
 
         editor = EditLine(self.text(), self.dialog, self)
+
+        # ВАЖНО: сохраняем OLD прямо в editor
+        editor.old_value = self.text()
+
         editor.editingFinished.connect(lambda: self.finish_edit(editor))
 
         self.grid.removeWidget(self)
@@ -91,8 +102,38 @@ class EditableLabel(QLabel):
         self.dialog.active_editor = editor
         self.dialog.active_label = self
 
+
     def finish_edit(self, editor):
-        new_value = editor.text()
+        new_value = editor.text().strip()
+        old_value = editor.old_value  # ← теперь OLD всегда правильный
+
+        if old_value != new_value:
+
+            updated = False
+
+            # 1) Проверяем: это повторное редактирование?
+            #    Тогда old_value == предыдущему NEW
+            for pair in EDIT_BUFFER:
+                if pair["new"] == old_value:
+                    print(f"[EDIT] Повторное редактирование: {pair['old']} -> {new_value}")
+                    pair["new"] = new_value
+                    updated = True
+                    break
+
+            # 2) Если нет — это первое редактирование этой строки
+            if not updated:
+                print(f"[EDIT] Новая запись: {old_value} -> {new_value}")
+                EDIT_BUFFER.append({
+                    "old": old_value,
+                    "new": new_value
+                })
+
+            # Лог состояния буфера
+            print("[BUFFER STATE]")
+            for pair in EDIT_BUFFER:
+                print(f"   OLD: {pair['old']}  ->  NEW: {pair['new']}")
+
+        # --- стандартная логика обновления GUI ---
         self.on_commit(new_value)
 
         index = self.grid.indexOf(editor)
@@ -119,7 +160,6 @@ class EditableLabel(QLabel):
 
         self.dialog.active_editor = None
         self.dialog.active_label = None
-
 
 class DeleteButton(QPushButton):
     def __init__(self, on_delete):
@@ -253,6 +293,15 @@ class DialogProperties(QDialog):
                     lbl.setParent(None)
                     del_btn.setParent(None)
                     lbl_name.setParent(None)
+                    before = len(EDIT_BUFFER)
+                    EDIT_BUFFER[:] = [
+                        pair for pair in EDIT_BUFFER
+                        if pair["old"] != value and pair["new"] != value
+                    ]
+                    after = len(EDIT_BUFFER)
+
+                    print(f"[DELETE] Удалили '{value}', буфер: {before} -> {after}")
+
 
                 del_btn = DeleteButton(delete_pre)
 
@@ -292,6 +341,14 @@ class DialogProperties(QDialog):
                     lbl.setParent(None)
                     del_btn.setParent(None)
                     lbl_name.setParent(None)
+                    before = len(EDIT_BUFFER)
+                    EDIT_BUFFER[:] = [
+                        pair for pair in EDIT_BUFFER
+                        if pair["old"] != value and pair["new"] != value
+                    ]
+                    after = len(EDIT_BUFFER)
+
+                    print(f"[DELETE] Удалили '{value}', буфер: {before} -> {after}")
 
 
                 del_btn = DeleteButton(delete_hi)
@@ -332,8 +389,14 @@ class DialogProperties(QDialog):
                     lbl.setParent(None)
                     del_btn.setParent(None)
                     lbl_name.setParent(None)
+                    before = len(EDIT_BUFFER)
+                    EDIT_BUFFER[:] = [
+                        pair for pair in EDIT_BUFFER
+                        if pair["old"] != value and pair["new"] != value
+                    ]
+                    after = len(EDIT_BUFFER)
 
-
+                    print(f"[DELETE] Удалили '{value}', буфер: {before} -> {after}")
 
                 del_btn = DeleteButton(delete_dhi)
 
@@ -353,7 +416,13 @@ class DialogProperties(QDialog):
         btn_cancel = QPushButton("Отмена")
 
         btn_save.clicked.connect(self.save_dialog)
-        btn_cancel.clicked.connect(self.close)
+        def cancel_all():
+            print("[CANCEL] Полная очистка буфера")
+            EDIT_BUFFER.clear()
+            self.close()
+
+        btn_cancel.clicked.connect(cancel_all)
+
 
         btn_layout.addStretch()
         btn_layout.addWidget(btn_save)
