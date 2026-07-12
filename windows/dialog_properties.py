@@ -309,6 +309,30 @@ class DialogProperties(QDialog):
         grid.addWidget(make_line(), row, 0, 1, 4)
         row += 1
 
+        # --- NPC строка ---
+        npc_label = QLabel("NPC:")
+        npc_label.setStyleSheet("font-weight: bold; padding: 4px;")
+
+        npc_button = QPushButton("NPC Name")
+        npc_button.setEnabled(False)  # пока не кликабельная
+        npc_button.setStyleSheet("""
+            QPushButton {
+                background-color: #444;
+                color: white;
+                padding: 4px 10px;
+                border-radius: 4px;
+            }
+        """)
+
+        grid.addWidget(npc_label, row, 0)
+        grid.addWidget(make_vline(), row, 1)
+        grid.addWidget(npc_button, row, 2, 1, 2)
+        row += 1
+
+        grid.addWidget(make_line(), row, 0, 1, 4)
+        row += 1
+
+
         xml_path = self.dialog_data["xml_path"].replace("\\", "/")
         grid.addWidget(QLabel("Путь:"), row, 0)
         grid.addWidget(make_vline(), row, 1)
