@@ -1,7 +1,7 @@
 import os
 import re
 import xml.etree.ElementTree as ET
-
+from windows.dialog_properties import EDIT_BUFFER
 
 class ResourceLoader:
     def __init__(self, settings, progress_callback=None):
@@ -178,7 +178,29 @@ class ResourceLoader:
             print(f"[ERROR] save_dialog: cannot find dialog boundaries for {dialog_id}")
             return
 
-        # --- Удаляем строки ТОЛЬКО внутри диалога ---
+        # --- ЭТАП 1: применяем EDIT_BUFFER ТОЛЬКО внутри диалога ---
+        global EDIT_BUFFER
+
+        if EDIT_BUFFER:
+            print("[SAVE] Применяем EDIT_BUFFER к XML")
+
+            for pair in EDIT_BUFFER:
+                old = pair["old"]
+                new = pair["new"]
+
+                found = False
+
+                # замены только внутри диалога
+                for i in range(start, end + 1):
+                    if old in lines[i]:
+                        lines[i] = lines[i].replace(old, new)
+                        found = True
+
+                if not found:
+                    print(f"[ERROR] OLD '{old}' не найден в диалоге — отмена сохранения")
+                    return
+
+        # --- ЭТАП 2: удаляем строки ТОЛЬКО внутри диалога ---
         new_lines = []
 
         for i, line in enumerate(lines):
@@ -186,7 +208,6 @@ class ResourceLoader:
 
             if start <= i <= end:
                 if stripped in to_delete:
-                    # удаляем строку
                     continue
 
             new_lines.append(line)

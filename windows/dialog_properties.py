@@ -457,12 +457,53 @@ class DialogProperties(QDialog):
         loader = mw.res_loader
 
         dialog_id = self.dialog_data["id"]
-        loader.save_dialog(dialog_id, self.dialog_data)
 
+        # ---------- ЭТАП 1: применяем EDIT_BUFFER к XML ----------
+
+        xml_path = self.dialog_data["xml_path"].replace("\\", "/")
+
+        try:
+            with open(xml_path, "r", encoding="utf-8") as f:
+                xml_content = f.read()
+        except UnicodeDecodeError:
+            with open(xml_path, "r", encoding="cp1251") as f:
+                xml_content = f.read()
+
+        # Если буфер пустой — просто идём дальше
+        if EDIT_BUFFER:
+            print("[SAVE] Применяем буфер изменений к XML")
+            for pair in EDIT_BUFFER:
+                old = pair["old"]
+                new = pair["new"]
+
+                if old == new:
+                    continue
+
+                if old not in xml_content:
+                    print(f"[ERROR] В XML не найден OLD '{old}' для замены на '{new}'")
+                    # Жёстко вылетаем, ничего не сохраняем
+                    return
+
+                print(f"[SAVE] Замена в XML: {old} -> {new}")
+                xml_content = xml_content.replace(old, new)
+
+            # Записываем обновлённый XML обратно
+            try:
+                with open(xml_path, "w", encoding="utf-8") as f:
+                    f.write(xml_content)
+            except UnicodeEncodeError:
+                with open(xml_path, "w", encoding="cp1251") as f:
+                    f.write(xml_content)
+
+        # ---------- ЭТАП 2: твой текущий механизм сохранения ----------
+
+        loader.save_dialog(dialog_id, self.dialog_data)
         loader.reload_dialog(dialog_id)
         dc.refresh_dialog(dialog_id)
 
+        print("[SAVE] Диалог сохранён, буфер изменений НЕ очищаем (на твой выбор)")
         self.close()
+
 
     def showEvent(self, event):
         super().showEvent(event)
