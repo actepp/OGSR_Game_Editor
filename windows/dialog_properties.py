@@ -1,5 +1,6 @@
 import os
 import re
+import xml.etree.ElementTree as ET
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QPushButton,
@@ -269,6 +270,7 @@ class DialogProperties(QDialog):
         self.active_editor = None
         self.active_label = None
 
+
         dc = self.parent()
         mw = dc.parent()
         self.loader = mw.res_loader
@@ -305,15 +307,14 @@ class DialogProperties(QDialog):
         name_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         grid.addWidget(name_label, row, 0, 1, 4)
         row += 1
-
-        grid.addWidget(make_line(), row, 0, 1, 4)
-        row += 1
-
         # --- NPC строка ---
+        gameplay_path = os.path.join(self.loader.paths["configs/gameplay"])
+        npc_name = find_npc_for_dialog(dialog_id, gameplay_path)
+
         npc_label = QLabel("NPC:")
         npc_label.setStyleSheet("font-weight: bold; padding: 4px;")
 
-        npc_button = QPushButton("NPC Name")
+        npc_button = QPushButton(npc_name if npc_name else "Не найден")
         npc_button.setEnabled(False)  # пока не кликабельная
         npc_button.setStyleSheet("""
             QPushButton {
@@ -323,6 +324,19 @@ class DialogProperties(QDialog):
                 border-radius: 4px;
             }
         """)
+
+        grid.addWidget(npc_label, row, 0)
+        grid.addWidget(make_vline(), row, 1)
+        grid.addWidget(npc_button, row, 2, 1, 2)
+        row += 1
+
+        grid.addWidget(make_line(), row, 0, 1, 4)
+        row += 1
+
+        grid.addWidget(make_line(), row, 0, 1, 4)
+        row += 1
+
+
 
         grid.addWidget(npc_label, row, 0)
         grid.addWidget(make_vline(), row, 1)
@@ -548,3 +562,63 @@ class DialogProperties(QDialog):
         x = screen.x() + (screen.width() - self.width()) // 2
         y = screen.y() + (screen.height() - self.height()) // 2
         self.move(x, y)
+
+def find_npc_for_dialog(dialog_id, gameplay_path):
+    """
+    Ищет НПС по диалогу в specific_characters_files.
+    Возвращает ИМЕННО ID NPC (из атрибута id="...").
+    """
+
+    npc_dir = os.path.join(gameplay_path, "specific_characters_files")
+    if not os.path.exists(npc_dir):
+        return None
+
+    # Регулярки
+    re_char_start = re.compile(r'\s*<specific_character\b[^>]*id="([^"]+)"', re.IGNORECASE)
+    re_actor      = re.compile(r'<actor_dialog>(.*?)</actor_dialog>', re.IGNORECASE)
+    re_start      = re.compile(r'<start_dialog>(.*?)</start_dialog>', re.IGNORECASE)
+
+    for filename in os.listdir(npc_dir):
+        if not filename.endswith(".xml"):
+            continue
+
+        full_path = os.path.join(npc_dir, filename)
+
+        try:
+            with open(full_path, "r", encoding="cp1251", errors="ignore") as f:
+                lines = f.readlines()
+        except:
+            continue
+
+        inside_character = False
+        current_npc_id = None
+
+        for line in lines:
+
+            # Начало блока NPC
+            m_start = re_char_start.search(line)
+            if m_start:
+                inside_character = True
+                current_npc_id = m_start.group(1)
+                continue
+
+            # Конец блока NPC
+            if inside_character and "</specific_character>" in line:
+                inside_character = False
+                current_npc_id = None
+                continue
+
+            if not inside_character:
+                continue
+
+            # actor_dialog
+            m_actor = re_actor.search(line)
+            if m_actor and m_actor.group(1) == dialog_id:
+                return current_npc_id
+
+            # start_dialog
+            m_start_d = re_start.search(line)
+            if m_start_d and m_start_d.group(1) == dialog_id:
+                return current_npc_id
+
+    return None
