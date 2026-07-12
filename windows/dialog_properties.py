@@ -7,7 +7,8 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QObject, QEvent
 
-EDIT_BUFFER = []   
+EDIT_BUFFER = []
+
 
 def make_line():
     line = QFrame()
@@ -72,13 +73,9 @@ class EditableLabel(QLabel):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def mousePressEvent(self, event):
-        # Если есть активный редактор — сначала завершаем его
         if self.dialog.active_editor is not None:
             self.dialog.finish_edit_external()
-            #return  # предотвращаем запуск start_edit в этот же момент
-
         self.start_edit()
-
 
     def start_edit(self):
         index = self.grid.indexOf(self)
@@ -88,10 +85,7 @@ class EditableLabel(QLabel):
         row, col, _, _ = self.grid.getItemPosition(index)
 
         editor = EditLine(self.text(), self.dialog, self)
-
-        # ВАЖНО: сохраняем OLD прямо в editor
         editor.old_value = self.text()
-
         editor.editingFinished.connect(lambda: self.finish_edit(editor))
 
         self.grid.removeWidget(self)
@@ -103,27 +97,21 @@ class EditableLabel(QLabel):
         self.dialog.active_editor = editor
         self.dialog.active_label = self
 
-
     def finish_edit(self, editor):
         new_value = editor.text().strip()
         old_value = editor.old_value
         tag = editor.label.tag
 
         if old_value != new_value:
-
             updated = False
 
-            # --- Повторное редактирование ---
             for pair in EDIT_BUFFER:
                 if pair["new_param"] == old_value and pair["old_tag"] == tag:
-                    print(f"[EDIT] Повторное редактирование: {pair['old_param']} -> {new_value}")
                     pair["new_param"] = new_value
                     updated = True
                     break
 
-            # --- Первое редактирование ---
             if not updated:
-                print(f"[EDIT] Новая запись: {old_value} -> {new_value}")
                 EDIT_BUFFER.append({
                     "old_tag": tag,
                     "new_tag": tag,
@@ -131,12 +119,6 @@ class EditableLabel(QLabel):
                     "new_param": new_value
                 })
 
-            print("[BUFFER STATE]")
-            for pair in EDIT_BUFFER:
-                print(f"   TAG: {pair['old_tag']} -> {pair['new_tag']}, "
-                      f"PARAM: {pair['old_param']} -> {pair['new_param']}")
-
-        # --- обновление dialog_data через on_commit ---
         self.on_commit(new_value)
 
         index = self.grid.indexOf(editor)
@@ -174,6 +156,27 @@ class DeleteButton(QPushButton):
         self.clicked.connect(self.on_delete)
 
 
+class AddButton(QPushButton):
+    def __init__(self, on_add):
+        super().__init__("+")
+        self.on_add = on_add
+
+        self.setFixedWidth(30)
+        self.setStyleSheet("""
+            QPushButton {
+                background-color: #008800;
+                color: white;
+                font-weight: bold;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #00aa00;
+            }
+        """)
+
+        self.clicked.connect(self.on_add)
+
+
 class DialogProperties(QDialog):
     def __init__(self, parent, dialog_data):
         super().__init__(parent)
@@ -188,10 +191,8 @@ class DialogProperties(QDialog):
         self.loader = mw.res_loader
         self.dialog_id = dialog_id
 
-        # Перечитываем диалог
         self.loader.reload_dialog(dialog_id)
         self.dialog_data = self.loader.get_dialog(dialog_id)
-
         self.dialog_data["_delete_lines"] = []
 
         self.setWindowTitle(f"Свойства {dialog_id}")
@@ -213,6 +214,7 @@ class DialogProperties(QDialog):
         main_layout.addLayout(grid)
 
         row = 0
+        self.current_row = row
 
         # Заголовок
         name_label = QLabel(dialog_id)
@@ -239,241 +241,35 @@ class DialogProperties(QDialog):
         grid.addWidget(make_line(), row, 0, 1, 4)
         row += 1
 
-        # -------------------------
-        #  PRECONDITIONS
-        # -------------------------
-        if self.dialog_data["preconditions"]:
+        self.current_row = row
+
+        # --- Унифицированные секции ---
+        self.render_section(
+            section_name="preconditions",
+            title="Precondition:",
+            tag="precondition",
+            commit_func=self.commit_pre,
+        )
+
+        self.render_section(
+            section_name="has_info",
+            title="Has Info:",
+            tag="has_info",
+            commit_func=self.commit_hi,
+        )
+
+        self.render_section(
+            section_name="dont_has_info",
+            title="Dont Has Info:",
+            tag="dont_has_info",
+            commit_func=self.commit_dhi,
+        )
+
+        # Кнопка добавления
+        add_btn = AddButton(self.add_new_param)
+        grid.addWidget(add_btn, self.current_row, 3)
+        self.current_row += 1
 
-            def commit_pre(index, val):
-                lst = self.dialog_data["preconditions"]
-                old = self.active_editor.old_value
-                try:
-                    real_index = lst.index(old)
-                    lst[real_index] = val.strip()
-                except ValueError:
-                    print(f"[COMMIT SKIPPED] precondition '{old}' уже удалён")
-
-            for i, pre in enumerate(self.dialog_data["preconditions"]):
-
-                exists = self.check_precondition(pre)
-
-                lbl_name = QLabel("Precondition:")
-                grid.addWidget(lbl_name, row, 0)
-                grid.addWidget(make_vline(), row, 1)
-
-                lbl = EditableLabel(pre, grid, lambda v, idx=i: commit_pre(idx, v), self, "precondition")
-
-                if not exists:
-                    lbl_name.setStyleSheet("color: red; font-weight: bold;")
-                    lbl.setStyleSheet("background-color: #330000; color: red; padding: 2px;")
-                else:
-                    lbl.setStyleSheet("padding: 2px;")
-
-                def delete_pre(i=i, lbl_name=lbl_name, lbl=lbl, value=pre):
-
-                    # >>> NEW: если строка была в режиме редактирования — убираем редактор вручную
-                    if self.active_editor is not None and self.active_label is lbl:
-                        editor = self.active_editor
-
-                        idx = self.grid.indexOf(editor)
-                        if idx >= 0:
-                            row_e, col_e, _, _ = self.grid.getItemPosition(idx)
-                            self.grid.removeWidget(editor)
-
-                        editor.deleteLater()
-
-                        self.active_editor = None
-                        self.active_label = None
-                    # <<< END NEW BLOCK
-
-                    del_btn = self.sender()
-                    line_text = f"<precondition>{value}</precondition>"
-                    self.dialog_data["_delete_lines"].append(line_text)
-
-                    self.dialog_data["preconditions"].pop(i)
-
-                    lbl.setParent(None)
-                    del_btn.setParent(None)
-                    lbl_name.setParent(None)
-
-                    EDIT_BUFFER[:] = [
-                        pair for pair in EDIT_BUFFER
-                        if not (
-                            pair["old_param"] == value or
-                            pair["new_param"] == value
-                        )
-                    ]
-
-                    print(f"[DELETE] Удалили '{value}'")
-
-                del_btn = DeleteButton(delete_pre)
-
-                grid.addWidget(lbl, row, 2)
-                grid.addWidget(del_btn, row, 3)
-
-                row += 1
-                grid.addWidget(make_line(), row, 0, 1, 4)
-                row += 1
-
-
-        # -------------------------
-        #  HAS INFO
-        # -------------------------
-        if self.dialog_data["has_info"]:
-
-            def commit_hi(index, val):
-                lst = self.dialog_data["has_info"]
-                old = self.active_editor.old_value
-                try:
-                    real_index = lst.index(old)
-                    lst[real_index] = val.strip()
-                except ValueError:
-                    print(f"[COMMIT SKIPPED] has_info '{old}' уже удалён")
-
-            for i, hi in enumerate(self.dialog_data["has_info"]):
-
-                lbl_name = QLabel("Has Info:")
-                grid.addWidget(lbl_name, row, 0)
-                grid.addWidget(make_vline(), row, 1)
-
-                lbl = EditableLabel(hi, grid, lambda v, idx=i: commit_hi(idx, v), self, "has_info")
-
-                def delete_hi(i=i, lbl_name=lbl_name, lbl=lbl, value=hi):
-
-                    # >>> NEW: если строка была в режиме редактирования — убираем редактор вручную
-                    if self.active_editor is not None and self.active_label is lbl:
-                        editor = self.active_editor
-
-                        idx = self.grid.indexOf(editor)
-                        if idx >= 0:
-                            row_e, col_e, _, _ = self.grid.getItemPosition(idx)
-                            self.grid.removeWidget(editor)
-
-                        editor.deleteLater()
-
-                        self.active_editor = None
-                        self.active_label = None
-                    # <<< END NEW BLOCK
-
-                    del_btn = self.sender()
-                    line_text = f"<has_info>{value}</has_info>"
-                    self.dialog_data["_delete_lines"].append(line_text)
-
-                    self.dialog_data["has_info"].pop(i)
-
-                    lbl.setParent(None)
-                    del_btn.setParent(None)
-                    lbl_name.setParent(None)
-
-                    EDIT_BUFFER[:] = [
-                        pair for pair in EDIT_BUFFER
-                        if not (
-                            pair["old_param"] == value or
-                            pair["new_param"] == value
-                        )
-                    ]
-
-                    print(f"[DELETE] Удалили '{value}'")
-
-                del_btn = DeleteButton(delete_hi)
-
-                grid.addWidget(lbl, row, 2)
-                grid.addWidget(del_btn, row, 3)
-
-                row += 1
-                grid.addWidget(make_line(), row, 0, 1, 4)
-                row += 1
-
-
-        # -------------------------
-        #  DONT HAS INFO
-        # -------------------------
-        if self.dialog_data["dont_has_info"]:
-
-            def commit_dhi(index, val):
-                lst = self.dialog_data["dont_has_info"]
-                old = self.active_editor.old_value
-                try:
-                    real_index = lst.index(old)
-                    lst[real_index] = val.strip()
-                except ValueError:
-                    print(f"[COMMIT SKIPPED] dont_has_info '{old}' уже удалён")
-
-            for i, dhi in enumerate(self.dialog_data["dont_has_info"]):
-
-                lbl_name = QLabel("Dont Has Info:")
-                grid.addWidget(lbl_name, row, 0)
-                grid.addWidget(make_vline(), row, 1)
-
-                lbl = EditableLabel(dhi, grid, lambda v, idx=i: commit_dhi(idx, v), self, "dont_has_info")
-
-                def delete_dhi(i=i, lbl_name=lbl_name, lbl=lbl, value=dhi):
-
-                    # >>> NEW: если строка была в режиме редактирования — убираем редактор вручную
-                    if self.active_editor is not None and self.active_label is lbl:
-                        editor = self.active_editor
-
-                        idx = self.grid.indexOf(editor)
-                        if idx >= 0:
-                            row_e, col_e, _, _ = self.grid.getItemPosition(idx)
-                            self.grid.removeWidget(editor)
-
-                        editor.deleteLater()
-
-                        self.active_editor = None
-                        self.active_label = None
-                    # <<< END NEW BLOCK
-
-                    del_btn = self.sender()
-                    line_text = f"<dont_has_info>{value}</dont_has_info>"
-                    self.dialog_data["_delete_lines"].append(line_text)
-
-                    self.dialog_data["dont_has_info"].pop(i)
-
-                    lbl.setParent(None)
-                    del_btn.setParent(None)
-                    lbl_name.setParent(None)
-
-                    EDIT_BUFFER[:] = [
-                        pair for pair in EDIT_BUFFER
-                        if not (
-                            pair["old_param"] == value or
-                            pair["new_param"] == value
-                        )
-                    ]
-
-                    print(f"[DELETE] Удалили '{value}'")
-
-                del_btn = DeleteButton(delete_dhi)
-
-                grid.addWidget(lbl, row, 2)
-                grid.addWidget(del_btn, row, 3)
-
-                row += 1
-                grid.addWidget(make_line(), row, 0, 1, 4)
-                row += 1
-
-
-        # -------------------------
-        #  UNIVERSAL GREEN PLUS
-        # -------------------------
-        def add_new_param():
-            print("[ADD] Добавляем новый параметр")
-
-            new_value = "new_param"
-
-            self.dialog_data["preconditions"].append(new_value)
-
-            self.close()
-            DialogProperties(self.parent(), self.dialog_data).show()
-
-        add_btn = AddButton(add_new_param)
-        grid.addWidget(add_btn, row, 3)
-        row += 1
-
-        # -------------------------
-        #  BUTTONS
-        # -------------------------
         main_layout.addStretch()
 
         btn_layout = QHBoxLayout()
@@ -485,7 +281,6 @@ class DialogProperties(QDialog):
         btn_save.clicked.connect(self.save_dialog)
 
         def cancel_all():
-            print("[CANCEL] Полная очистка буфера")
             EDIT_BUFFER.clear()
             self.close()
 
@@ -496,19 +291,125 @@ class DialogProperties(QDialog):
         btn_layout.addWidget(btn_cancel)
 
     # -------------------------
-    #  CLOSE EVENT
+    #  Универсальный рендер секции
     # -------------------------
-    def closeEvent(self, event):
-        print("[CLOSE] Окно закрыто, очищаем буфер")
-        EDIT_BUFFER.clear()
-        super().closeEvent(event)
+    def render_section(self, section_name, title, tag, commit_func):
+        lst = self.dialog_data.get(section_name)
+        if not lst:
+            return
+
+        grid = self.grid
+        row = self.current_row
+
+        for i, value in enumerate(lst):
+
+            lbl_name = QLabel(title)
+            grid.addWidget(lbl_name, row, 0)
+            grid.addWidget(make_vline(), row, 1)
+
+            lbl = EditableLabel(
+                value,
+                grid,
+                lambda v, idx=i: commit_func(idx, v),
+                self,
+                tag
+            )
+
+            def delete_item(i=i, lbl_name=lbl_name, lbl=lbl, value=value):
+                if self.active_editor is not None and self.active_label is lbl:
+                    editor = self.active_editor
+                    idx = grid.indexOf(editor)
+                    if idx >= 0:
+                        r, c, _, _ = grid.getItemPosition(idx)
+                        grid.removeWidget(editor)
+                    editor.deleteLater()
+                    self.active_editor = None
+                    self.active_label = None
+
+                del_btn = self.sender()
+                line_text = f"<{tag}>{value}</{tag}>"
+                self.dialog_data["_delete_lines"].append(line_text)
+
+                lst.pop(i)
+
+                lbl.setParent(None)
+                del_btn.setParent(None)
+                lbl_name.setParent(None)
+
+                EDIT_BUFFER[:] = [
+                    pair for pair in EDIT_BUFFER
+                    if not (
+                        pair["old_param"] == value or
+                        pair["new_param"] == value
+                    )
+                ]
+
+            del_btn = DeleteButton(delete_item)
+
+            grid.addWidget(lbl, row, 2)
+            grid.addWidget(del_btn, row, 3)
+
+            row += 1
+            grid.addWidget(make_line(), row, 0, 1, 4)
+            row += 1
+
+        self.current_row = row
 
     # -------------------------
-    #  FINISH EDIT EXTERNAL
+    #  COMMIT handlers
     # -------------------------
-    def finish_edit_external(self):
-        if self.active_editor is not None:
-            self.active_editor.clearFocus()
+    def commit_pre(self, index, val):
+        lst = self.dialog_data["preconditions"]
+        old = self.active_editor.old_value
+        try:
+            real_index = lst.index(old)
+            lst[real_index] = val.strip()
+        except ValueError:
+            pass
+
+    def commit_hi(self, index, val):
+        lst = self.dialog_data["has_info"]
+        old = self.active_editor.old_value
+        try:
+            real_index = lst.index(old)
+            lst[real_index] = val.strip()
+        except ValueError:
+            pass
+
+    def commit_dhi(self, index, val):
+        lst = self.dialog_data["dont_has_info"]
+        old = self.active_editor.old_value
+        try:
+            real_index = lst.index(old)
+            lst[real_index] = val.strip()
+        except ValueError:
+            pass
+
+    # -------------------------
+    #  ADD NEW PARAM
+    # -------------------------
+    def add_new_param(self):
+        new_value = "new_param"
+        self.dialog_data["preconditions"].append(new_value)
+        self.close()
+        DialogProperties(self.parent(), self.dialog_data).show()
+
+    # -------------------------
+    #  SAVE
+    # -------------------------
+    def save_dialog(self):
+        dc = self.parent()
+        mw = dc.parent()
+        loader = mw.res_loader
+
+        dialog_id = self.dialog_data["id"]
+
+        loader.save_dialog(dialog_id, self.dialog_data)
+        loader.reload_dialog(dialog_id)
+        dc.refresh_dialog(dialog_id)
+
+        EDIT_BUFFER.clear()
+        self.close()
 
     # -------------------------
     #  CANCEL EDIT
@@ -532,27 +433,14 @@ class DialogProperties(QDialog):
         self.active_editor = None
         self.active_label = None
 
-    # -------------------------
-    #  SAVE DIALOG
-    # -------------------------
-    def save_dialog(self):
-        dc = self.parent()
-        mw = dc.parent()
-        loader = mw.res_loader
+    def finish_edit_external(self):
+        if self.active_editor is not None:
+            self.active_editor.clearFocus()
 
-        dialog_id = self.dialog_data["id"]
-
-        loader.save_dialog(dialog_id, self.dialog_data)
-        loader.reload_dialog(dialog_id)
-        dc.refresh_dialog(dialog_id)
-
-        print("[SAVE] Диалог сохранён, очищаем буфер")
+    def closeEvent(self, event):
         EDIT_BUFFER.clear()
-        self.close()
+        super().closeEvent(event)
 
-    # -------------------------
-    #  CENTER WINDOW
-    # -------------------------
     def showEvent(self, event):
         super().showEvent(event)
         self.center_on_screen()
@@ -562,74 +450,3 @@ class DialogProperties(QDialog):
         x = screen.x() + (screen.width() - self.width()) // 2
         y = screen.y() + (screen.height() - self.height()) // 2
         self.move(x, y)
-
-    # -------------------------
-    #  CHECK PRECONDITION
-    # -------------------------
-    def check_precondition(self, precondition: str) -> bool:
-        if "." not in precondition:
-            return False
-
-        module, func = precondition.split(".", 1)
-
-        loader = self.parent().parent().res_loader
-        scripts_root = loader.paths.get("scripts")
-
-        if not scripts_root or not os.path.exists(scripts_root):
-            print("ERROR: scripts path not found:", scripts_root)
-            return False
-
-        target_file = None
-        for root, dirs, files in os.walk(scripts_root):
-            for f in files:
-                name = f.lower()
-                if name == f"{module.lower()}.script" or name == f"{module.lower()}.lua":
-                    target_file = os.path.join(root, f)
-                    break
-            if target_file:
-                break
-
-        if not target_file:
-            print("ERROR: module file not found:", module)
-            return False
-
-        try:
-            with open(target_file, "r", encoding="utf-8") as f:
-                content = f.read()
-        except UnicodeDecodeError:
-            try:
-                with open(target_file, "r", encoding="cp1251") as f:
-                    content = f.read()
-            except Exception as e:
-                print("ERROR reading script:", e)
-                return False
-
-        pattern = rf"function\s+{func}\s*\("
-        found = re.search(pattern, content) is not None
-
-        if not found:
-            print(f"ERROR: function {func} not found in {target_file}")
-
-        return found
-
-
-
-class AddButton(QPushButton):
-    def __init__(self, on_add):
-        super().__init__("+")
-        self.on_add = on_add
-
-        self.setFixedWidth(30)
-        self.setStyleSheet("""
-            QPushButton {
-                background-color: #008800;
-                color: white;
-                font-weight: bold;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #00aa00;
-            }
-        """)
-
-        self.clicked.connect(self.on_add)
