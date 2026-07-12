@@ -283,6 +283,9 @@ class DialogProperties(QDialog):
                     lbl.setStyleSheet("padding: 2px;")
 
                 def delete_pre(i=i, lbl_name=lbl_name, lbl=lbl, value=pre):
+                    if self.active_editor is not None:
+                        self.finish_edit_external()
+
                     del_btn = self.sender()
 
                     line_text = f"<precondition>{value}</precondition>"
@@ -331,6 +334,8 @@ class DialogProperties(QDialog):
                 )
 
                 def delete_hi(i=i, lbl_name=lbl_name, lbl=lbl, value=hi):
+                    if self.active_editor is not None:
+                        self.finish_edit_external()
                     del_btn = self.sender()  # кнопка, по которой нажали
 
                     line_text = f"<has_info>{value}</has_info>"
@@ -379,6 +384,8 @@ class DialogProperties(QDialog):
                 )
 
                 def delete_dhi(i=i, lbl_name=lbl_name, lbl=lbl, value=dhi):
+                    if self.active_editor is not None:
+                        self.finish_edit_external()
                     del_btn = self.sender()
 
                     line_text = f"<dont_has_info>{value}</dont_has_info>"
