@@ -621,8 +621,7 @@ class InfiniteGridWidget(QWidget):
 
                 if node.right_button_rect().contains(wx, wy):
                     print(f"[OK] CLOSE clicked for {node.dialog_id}")
-                    self.nodes.remove(node)
-                    self.update()
+                    self.delete_branch(node)
                     return
 
                 self.update()
@@ -634,6 +633,41 @@ class InfiniteGridWidget(QWidget):
 
         if event.button() == Qt.MouseButton.LeftButton:
             self._last_mouse_pos = None
+    # --------------------------------------------------------
+    #   Удаление ветки (родитель + все потомки)
+    # --------------------------------------------------------
+    def delete_branch(self, root_node: DialogNode):
+        root_pid = root_node.logic_id
+
+        # собрать всех потомков
+        to_delete = self.collect_descendants(root_pid)
+        to_delete.add(root_pid)
+
+        # удалить узлы
+        self.nodes = [n for n in self.nodes if n.logic_id not in to_delete]
+
+        self.update()
+
+
+    # --------------------------------------------------------
+    #   Сбор всех потомков по связям next
+    # --------------------------------------------------------
+    def collect_descendants(self, pid):
+        result = set()
+        stack = [pid]
+
+        while stack:
+            cur = stack.pop()
+
+            # если у узла есть дети
+            for n in self.nodes:
+                if n.logic_id == cur and n.logic_next is not None:
+                    child = n.logic_next
+                    if child not in result:
+                        result.add(child)
+                        stack.append(child)
+
+        return result
 
     # --------------------------------------------------------
     #   Зум
