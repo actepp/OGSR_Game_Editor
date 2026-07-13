@@ -2,14 +2,43 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QListWidget, QLineEdit, QSplitter, QMenu, QApplication
 )
-from PyQt6.QtGui import QAction, QPainter, QPen, QColor
-from PyQt6.QtCore import Qt, QPoint, QRectF
+from PyQt6.QtGui import QAction, QPainter, QPen, QColor, QFont
+from PyQt6.QtCore import Qt, QPoint, QRectF, QRect
 from windows.dialog_properties import DialogProperties
 
 
+# ============================================================
+#   Узел диалога (квадратик)
+# ============================================================
+
+class DialogNode:
+    def __init__(self, dialog_id: str, x: float, y: float):
+        self.dialog_id = dialog_id
+        self.x = x
+        self.y = y
+
+        self.width = 260
+        self.height = 120
+        self.header_height = 32
+
+        self.dragging = False
+        self.drag_offset_x = 0
+        self.drag_offset_y = 0
+
+    def rect(self):
+        return QRectF(self.x, self.y, self.width, self.height)
+
+    def header_rect(self):
+        return QRectF(self.x, self.y, self.width, self.header_height)
+
+
+# ============================================================
+#   Бесконечная сетка + узлы
+# ============================================================
+
 class InfiniteGridWidget(QWidget):
     """
-    Бесконечное поле с сеткой, которое можно таскать ЛКМ и зумить колесом.
+    Бесконечное поле с сеткой, панорамированием, зумом и узлами.
     """
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -22,6 +51,26 @@ class InfiniteGridWidget(QWidget):
         self._last_mouse_pos: QPoint | None = None
         self.base_grid_step = 50.0
 
+        self.nodes: list[DialogNode] = []
+        self.active_node: DialogNode | None = None
+
+    # --------------------------------------------------------
+    #   Добавление узла
+    # --------------------------------------------------------
+    def add_node(self, dialog_id: str):
+        cx = self.width() / 2
+        cy = self.height() / 2
+
+        world_x = (cx - self.offset_x) / self.scale
+        world_y = (cy - self.offset_y) / self.scale
+
+        node = DialogNode(dialog_id, world_x - 130, world_y - 60)
+        self.nodes.append(node)
+        self.update()
+
+    # --------------------------------------------------------
+    #   Рисование
+    # --------------------------------------------------------
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
@@ -64,15 +113,72 @@ class InfiniteGridWidget(QWidget):
             painter.drawLine(0, int(sy), w, int(sy))
             y += step
 
+        # ----------------------------------------------------
+        #   Рисуем узлы (всегда поверх сетки)
+        # ----------------------------------------------------
+        for node in self.nodes:
+            sx = node.x * self.scale + self.offset_x
+            sy = node.y * self.scale + self.offset_y
+            sw = node.width * self.scale
+            sh = node.height * self.scale
 
+            rect = QRect(int(sx), int(sy), int(sw), int(sh))
+            header_rect = QRect(int(sx), int(sy), int(sw), int(node.header_height * self.scale))
 
+            # тело узла
+            painter.setPen(QPen(QColor(180, 180, 180)))
+            painter.setBrush(QColor(40, 40, 40))
+            painter.drawRect(rect)
+
+            # шапка
+            painter.setPen(QPen(QColor(200, 200, 200)))
+            painter.setBrush(QColor(55, 55, 55))
+            painter.drawRect(header_rect)
+
+            # текст
+            painter.setPen(QPen(QColor(230, 230, 230)))
+            font = QFont("Arial", int(14 * self.scale))
+            painter.setFont(font)
+            painter.drawText(header_rect, Qt.AlignmentFlag.AlignCenter, node.dialog_id)
+
+    # --------------------------------------------------------
+    #   Панорамирование + перетаскивание узлов
+    # --------------------------------------------------------
     def mousePressEvent(self, event):
+        pos = event.position().toPoint()
+
+        # экран → мир
+        world_x = (pos.x() - self.offset_x) / self.scale
+        world_y = (pos.y() - self.offset_y) / self.scale
+
+        # проверяем попадание в шапку узла
+        for node in reversed(self.nodes):  # верхние узлы проверяем первыми
+            hr = node.header_rect()
+            if hr.contains(world_x, world_y):
+                self.active_node = node
+                node.dragging = True
+                node.drag_offset_x = world_x - node.x
+                node.drag_offset_y = world_y - node.y
+                return
+
+        # иначе — панорамирование
         if event.button() == Qt.MouseButton.LeftButton:
-            self._last_mouse_pos = event.position().toPoint()
+            self._last_mouse_pos = pos
 
     def mouseMoveEvent(self, event):
+        pos = event.position().toPoint()
+
+        if self.active_node and self.active_node.dragging:
+            world_x = (pos.x() - self.offset_x) / self.scale
+            world_y = (pos.y() - self.offset_y) / self.scale
+
+            self.active_node.x = world_x - self.active_node.drag_offset_x
+            self.active_node.y = world_y - self.active_node.drag_offset_y
+
+            self.update()
+            return
+
         if self._last_mouse_pos is not None and event.buttons() & Qt.MouseButton.LeftButton:
-            pos = event.position().toPoint()
             dx = pos.x() - self._last_mouse_pos.x()
             dy = pos.y() - self._last_mouse_pos.y()
 
@@ -83,9 +189,16 @@ class InfiniteGridWidget(QWidget):
             self.update()
 
     def mouseReleaseEvent(self, event):
+        if self.active_node:
+            self.active_node.dragging = False
+            self.active_node = None
+
         if event.button() == Qt.MouseButton.LeftButton:
             self._last_mouse_pos = None
 
+    # --------------------------------------------------------
+    #   Зум
+    # --------------------------------------------------------
     def wheelEvent(self, event):
         delta = event.angleDelta().y()
         zoom_factor = 1.0 + (delta / 1200.0)
@@ -108,6 +221,10 @@ class InfiniteGridWidget(QWidget):
         self.update()
 
 
+# ============================================================
+#   Основной конструктор диалогов
+# ============================================================
+
 class DialogConstructor(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -120,7 +237,9 @@ class DialogConstructor(QWidget):
         self.setLayout(main_layout)
         main_layout.addWidget(splitter)
 
-        # Левая часть
+        # ----------------------------------------------------
+        #   Левая часть
+        # ----------------------------------------------------
         left_container = QWidget()
         left_layout = QVBoxLayout()
         left_container.setLayout(left_layout)
@@ -135,11 +254,14 @@ class DialogConstructor(QWidget):
         self.dialog_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.dialog_list.customContextMenuRequested.connect(self.open_context_menu)
         self.dialog_list.keyPressEvent = self._list_key_press
+        self.dialog_list.itemDoubleClicked.connect(self.open_dialog_from_list)
 
         left_layout.addWidget(self.dialog_list)
         splitter.addWidget(left_container)
 
-        # Правая часть — бесконечная сетка
+        # ----------------------------------------------------
+        #   Правая часть — бесконечная сетка
+        # ----------------------------------------------------
         right_container = QWidget()
         right_layout = QVBoxLayout()
         right_container.setLayout(right_layout)
@@ -153,6 +275,9 @@ class DialogConstructor(QWidget):
         self.all_dialogs: list[str] = []
         self.load_dialogs()
 
+    # --------------------------------------------------------
+    #   Загрузка списка диалогов
+    # --------------------------------------------------------
     def load_dialogs(self):
         loader = self.parent().res_loader
         dialog_ids = loader.get_dialog_list()
@@ -164,6 +289,9 @@ class DialogConstructor(QWidget):
         for d in dialog_ids:
             self.dialog_list.addItem(d)
 
+    # --------------------------------------------------------
+    #   Фильтр
+    # --------------------------------------------------------
     def update_filter(self, text: str):
         text = text.lower()
         self.dialog_list.clear()
@@ -172,6 +300,9 @@ class DialogConstructor(QWidget):
             if text in d.lower():
                 self.dialog_list.addItem(d)
 
+    # --------------------------------------------------------
+    #   Контекстное меню
+    # --------------------------------------------------------
     def open_context_menu(self, position):
         item = self.dialog_list.itemAt(position)
         if not item:
@@ -187,10 +318,27 @@ class DialogConstructor(QWidget):
         menu.addAction(props_action)
         menu.addSeparator()
 
+        open_action.triggered.connect(lambda: self.open_dialog(dialog_id))
         props_action.triggered.connect(lambda: self.show_properties(dialog_id))
 
         menu.exec(self.dialog_list.mapToGlobal(position))
 
+    # --------------------------------------------------------
+    #   Двойной ЛКМ по списку
+    # --------------------------------------------------------
+    def open_dialog_from_list(self, item):
+        dialog_id = item.text()
+        self.open_dialog(dialog_id)
+
+    # --------------------------------------------------------
+    #   Открытие диалога → узел на сетке
+    # --------------------------------------------------------
+    def open_dialog(self, dialog_id: str):
+        self.grid_view.add_node(dialog_id)
+
+    # --------------------------------------------------------
+    #   Свойства диалога
+    # --------------------------------------------------------
     def show_properties(self, dialog_id: str):
         loader = self.parent().res_loader
         dialog_data = loader.get_dialog(dialog_id)
@@ -198,6 +346,9 @@ class DialogConstructor(QWidget):
         dlg = DialogProperties(self, dialog_data)
         dlg.show()
 
+    # --------------------------------------------------------
+    #   Сохранение
+    # --------------------------------------------------------
     def save_current_dialog(self):
         item = self.dialog_list.currentItem()
         if not item:
@@ -208,6 +359,9 @@ class DialogConstructor(QWidget):
         data = loader.get_dialog(dialog_id)
         loader.save_dialog(dialog_id, data)
 
+    # --------------------------------------------------------
+    #   Копирование Ctrl+C
+    # --------------------------------------------------------
     def _list_key_press(self, event):
         if event.key() == Qt.Key.Key_C and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             item = self.dialog_list.currentItem()
@@ -216,6 +370,9 @@ class DialogConstructor(QWidget):
         else:
             QListWidget.keyPressEvent(self.dialog_list, event)
 
+    # --------------------------------------------------------
+    #   Обновление UI
+    # --------------------------------------------------------
     def refresh_dialog(self, dialog_id):
         self.load_dialogs()
         self.update_filter(self.search_box.text())
