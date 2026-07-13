@@ -255,6 +255,43 @@ class InfiniteGridWidget(QWidget):
         painter.setPen(pen)
         painter.drawLine(int(sx), int(sy), int(tx), int(ty))
 
+        # --------------------------------------------------------
+        #   Рисуем стрелку на конце
+        # --------------------------------------------------------
+        arrow_size = 12  # длина стрелки
+
+        # направление линии
+        dx = tx - sx
+        dy = ty - sy
+        length = (dx*dx + dy*dy) ** 0.5
+        if length == 0:
+            return
+
+        # нормализуем
+        ux = dx / length
+        uy = dy / length
+
+        # перпендикуляр
+        px = -uy
+        py = ux
+
+        # точки стрелки
+        ax = tx - ux * arrow_size
+        ay = ty - uy * arrow_size
+
+        left_x  = ax + px * (arrow_size / 2)
+        left_y  = ay + py * (arrow_size / 2)
+        right_x = ax - px * (arrow_size / 2)
+        right_y = ay - py * (arrow_size / 2)
+
+        painter.setBrush(QColor(200, 200, 80))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawPolygon(
+            QPoint(int(tx), int(ty)),
+            QPoint(int(left_x), int(left_y)),
+            QPoint(int(right_x), int(right_y))
+        )
+
 
     # --------------------------------------------------------
     #   Добавление узла
