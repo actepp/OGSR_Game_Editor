@@ -6,6 +6,7 @@ from PyQt6.QtGui import QAction, QPainter, QPen, QColor, QFont
 from PyQt6.QtCore import Qt, QPoint, QRectF, QRect
 from windows.dialog_properties import DialogProperties
 
+AVAILABLE_LOCALES = ["rus", "eng"]
 
 # ============================================================
 #   Узел диалога (квадратик)
@@ -16,6 +17,10 @@ class DialogNode:
         self.dialog_id = dialog_id
         self.x = x
         self.y = y
+
+        self.locale = "rus"   # локаль по умолчанию
+        self.locale_open = False
+        self.locale_button_size = 26
 
         self.width = 260
         self.height = 120
@@ -31,11 +36,43 @@ class DialogNode:
         self.resize_offset_x = 0
         self.resize_offset_y = 0
 
+        # кнопки
+        self.left_button_size = 20
+        self.right_button_size = 20
+
+        # визуальная реакция кнопок
+        self.pressed_left_button = False
+        self.pressed_right_button = False
+
+    def locale_button_rect(self):
+        return QRectF(
+            self.x + self.width - self.locale_button_size - 6,
+            self.y + self.header_height + 4,
+            self.locale_button_size,
+            self.locale_button_size
+        )
+
     def rect(self):
         return QRectF(self.x, self.y, self.width, self.height)
 
     def header_rect(self):
         return QRectF(self.x, self.y, self.width, self.header_height)
+
+    def left_button_rect(self):
+        return QRectF(
+            self.x + 4,
+            self.y + (self.header_height - self.left_button_size) / 2,
+            self.left_button_size,
+            self.left_button_size
+        )
+
+    def right_button_rect(self):
+        return QRectF(
+            self.x + self.width - self.right_button_size - 4,
+            self.y + (self.header_height - self.right_button_size) / 2,
+            self.right_button_size,
+            self.right_button_size
+        )
 
 
 # ============================================================
@@ -61,6 +98,24 @@ class InfiniteGridWidget(QWidget):
         self.active_node: DialogNode | None = None
 
         self.resize_margin = 12  # зона нижнего правого угла
+
+    def get_app_font(self):
+        return QApplication.instance().font()
+
+    def smart_font_size(self, base: int) -> int:
+        """
+        Умный размер шрифта:
+        - до scale 1.5 — растёт нормально
+        - после scale 1.5 — рост замедляется
+        - после scale 3 — почти не растёт
+        """
+        if self.scale <= 1.5:
+            return int(base * self.scale)
+
+        if self.scale <= 3:
+            return int(base * (1.5 + (self.scale - 1.5) * 0.4))
+
+        return int(base * (1.5 + (3 - 1.5) * 0.4))  # фиксируем максимум
 
 
     # --------------------------------------------------------
@@ -120,7 +175,7 @@ class InfiniteGridWidget(QWidget):
         start_y = (int(visible_rect.top() // step) - 1) * step
         end_y   = (int(visible_rect.bottom() // step) + 1) * step
 
-        pen = QPen(QColor(60, 60, 60))
+        pen = QPen(QColor(25, 25, 25))  # более тёмная сетка
         pen.setWidth(1)
         painter.setPen(pen)
 
@@ -160,25 +215,125 @@ class InfiniteGridWidget(QWidget):
 
             # текст
             painter.setPen(QPen(QColor(230, 230, 230)))
-            font = QFont("Arial", int(14 * self.scale))
+            app_font = self.get_app_font()
+            font = QFont(app_font.family(), self.smart_font_size(app_font.pointSize()))
+
             painter.setFont(font)
             painter.drawText(header_rect, Qt.AlignmentFlag.AlignCenter, node.dialog_id)
 
-            # треугольник в нижнем правом углу
+            # ------------------------------------------------
+            #   ЛЕВАЯ КНОПКА — галочка
+            # ------------------------------------------------
+            lb = node.left_button_rect()
+            lb_sx = int(lb.x() * self.scale + self.offset_x)
+            lb_sy = int(lb.y() * self.scale + self.offset_y)
+            lb_sw = int(lb.width() * self.scale)
+            lb_sh = int(lb.height() * self.scale)
+
+            color = QColor(60, 140, 60) if not node.pressed_left_button else QColor(40, 100, 40)
+            painter.setBrush(color)
+            painter.setPen(QPen(QColor(30, 90, 30)))
+            painter.drawRect(lb_sx, lb_sy, lb_sw, lb_sh)
+
+            painter.setPen(QPen(QColor(255, 255, 255), 2))
+            painter.drawLine(lb_sx + 4, lb_sy + lb_sh//2,
+                             lb_sx + lb_sw//2, lb_sy + lb_sh - 4)
+            painter.drawLine(lb_sx + lb_sw//2, lb_sy + lb_sh - 4,
+                             lb_sx + lb_sw - 4, lb_sy + 4)
+
+            # ------------------------------------------------
+            #   ПРАВАЯ КНОПКА — крестик
+            # ------------------------------------------------
+            rb = node.right_button_rect()
+            rb_sx = int(rb.x() * self.scale + self.offset_x)
+            rb_sy = int(rb.y() * self.scale + self.offset_y)
+            rb_sw = int(rb.width() * self.scale)
+            rb_sh = int(rb.height() * self.scale)
+
+            color = QColor(150, 60, 60) if not node.pressed_right_button else QColor(110, 40, 40)
+            painter.setBrush(color)
+            painter.setPen(QPen(QColor(90, 30, 30)))
+            painter.drawRect(rb_sx, rb_sy, rb_sw, rb_sh)
+
+            painter.setPen(QPen(QColor(255, 255, 255), 2))
+            painter.drawLine(rb_sx + 4, rb_sy + 4,
+                             rb_sx + rb_sw - 4, rb_sy + rb_sh - 4)
+            painter.drawLine(rb_sx + rb_sw - 4, rb_sy + 4,
+                             rb_sx + 4, rb_sy + rb_sh - 4)
+
+            # ------------------------------------------------
+            #   КНОПКА ЛОКАЛИ
+            # ------------------------------------------------
+            loc = node.locale_button_rect()
+            loc_sx = int(loc.x() * self.scale + self.offset_x)
+            loc_sy = int(loc.y() * self.scale + self.offset_y)
+            loc_sw = int(loc.width() * self.scale)
+            loc_sh = int(loc.height() * self.scale)
+
+            painter.setBrush(QColor(70, 70, 120))
+            painter.setPen(QPen(QColor(40, 40, 80)))
+            painter.drawRect(loc_sx, loc_sy, loc_sw, loc_sh)
+
+            painter.setPen(QPen(QColor(255, 255, 255)))
+            app_font = self.get_app_font()
+            font = QFont(app_font.family(), self.smart_font_size(app_font.pointSize()))
+            painter.setFont(font)
+            painter.drawText(QRect(loc_sx, loc_sy, loc_sw, loc_sh), Qt.AlignmentFlag.AlignCenter, node.locale.upper())
+
+            # ------------------------------------------------
+            #   ВЫПАДАЮЩИЙ СПИСОК ЛОКАЛЕЙ
+            # ------------------------------------------------
+            if node.locale_open:
+                box_w = 80 * self.scale
+                box_h = len(AVAILABLE_LOCALES) * (22 * self.scale)
+
+                box_x = loc_sx
+                box_y = loc_sy + loc_sh + 4
+
+                painter.setBrush(QColor(50, 50, 50))
+                painter.setPen(QPen(QColor(120, 120, 120)))
+                painter.drawRect(int(box_x), int(box_y), int(box_w), int(box_h))
+
+                for i, lang in enumerate(AVAILABLE_LOCALES):
+                    item_y = box_y + i * (22 * self.scale)
+
+                    painter.setPen(QPen(QColor(220, 220, 220)))
+
+                    # Умный шрифт
+                    app_font = self.get_app_font()
+                    font = QFont(app_font.family(), self.smart_font_size(app_font.pointSize()))
+
+                    painter.setFont(font)
+
+                    painter.drawText(
+                        QRect(
+                            int(box_x),
+                            int(item_y),
+                            int(box_w),
+                            int(22 * self.scale)
+                        ),
+                        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                        f"  {lang.upper()}"
+                    )
+
+
+
+            # ------------------------------------------------
+            #   Треугольник ресайза
+            # ------------------------------------------------
             tri_size = 14 * self.scale
 
-            p1 = QPoint(int(sx + sw), int(sy + sh))                      # нижний правый угол
-            p2 = QPoint(int(sx + sw - tri_size), int(sy + sh))           # влево
-            p3 = QPoint(int(sx + sw), int(sy + sh - tri_size))           # вверх
+            p1 = QPoint(int(sx + sw), int(sy + sh))
+            p2 = QPoint(int(sx + sw - tri_size), int(sy + sh))
+            p3 = QPoint(int(sx + sw), int(sy + sh - tri_size))
 
             painter.setBrush(QColor(160, 160, 160))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawPolygon(p1, p2, p3)
 
 
-
     # --------------------------------------------------------
-    #   Панорамирование + перетаскивание + ресайз
+    #   Панорамирование + перетаскивание + ресайз + кнопки
     # --------------------------------------------------------
     def mousePressEvent(self, event):
         pos = event.position().toPoint()
@@ -188,7 +343,46 @@ class InfiniteGridWidget(QWidget):
 
         for node in reversed(self.nodes):
 
-            # --- ресайз только за нижний правый угол ---
+            # --- кнопка локали ---
+            if node.locale_button_rect().contains(wx, wy):
+                node.locale_open = not node.locale_open
+                self.update()
+                return
+
+            # --- выбор локали ---
+            if node.locale_open:
+                loc = node.locale_button_rect()
+                box_x = loc.x()
+                box_y = loc.y() + node.locale_button_size + 4
+                box_w = 80
+                box_h = len(AVAILABLE_LOCALES) * 22
+
+                if QRectF(box_x, box_y, box_w, box_h).contains(wx, wy):
+                    index = int((wy - box_y) // 22)
+                    if 0 <= index < len(AVAILABLE_LOCALES):
+                        node.locale = AVAILABLE_LOCALES[index]
+                        print(f"[OK] Locale changed for {node.dialog_id}: {node.locale}")
+                    node.locale_open = False
+                    self.update()
+                    return
+
+                # клик вне списка — закрыть
+                node.locale_open = False
+                self.update()
+
+            # --- кнопка галочки ---
+            if node.left_button_rect().contains(wx, wy):
+                node.pressed_left_button = True
+                self.update()
+                return
+
+            # --- кнопка крестика ---
+            if node.right_button_rect().contains(wx, wy):
+                node.pressed_right_button = True
+                self.update()
+                return
+
+            # --- ресайз ---
             if self.is_in_resize_corner(node, wx, wy):
                 self.active_node = node
                 node.resizing = True
@@ -215,7 +409,7 @@ class InfiniteGridWidget(QWidget):
         wy = (pos.y() - self.offset_y) / self.scale
 
         # ---------------------------
-        #   Ресайз узла (только bottom-right)
+        #   Ресайз узла
         # ---------------------------
         if self.active_node and self.active_node.resizing:
             node = self.active_node
@@ -256,6 +450,32 @@ class InfiniteGridWidget(QWidget):
 
 
     def mouseReleaseEvent(self, event):
+        # кнопки — отпускание
+        wx = (event.position().x() - self.offset_x) / self.scale
+        wy = (event.position().y() - self.offset_y) / self.scale
+
+        for node in list(self.nodes):
+
+            # --- галочка ---
+            if node.pressed_left_button:
+                node.pressed_left_button = False
+
+                if node.left_button_rect().contains(wx, wy):
+                    print(f"[OK] SAVE clicked for {node.dialog_id}")
+                self.update()
+
+            # --- крестик ---
+            if node.pressed_right_button:
+                node.pressed_right_button = False
+
+                if node.right_button_rect().contains(wx, wy):
+                    print(f"[OK] CLOSE clicked for {node.dialog_id}")
+                    self.nodes.remove(node)
+                    self.update()
+                    return
+
+                self.update()
+
         if self.active_node:
             self.active_node.dragging = False
             self.active_node.resizing = False
@@ -442,16 +662,3 @@ class DialogConstructor(QWidget):
     def _list_key_press(self, event):
         if event.key() == Qt.Key.Key_C and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             item = self.dialog_list.currentItem()
-            if item:
-                QApplication.clipboard().setText(item.text())
-        else:
-            QListWidget.keyPressEvent(self.dialog_list, event)
-
-
-    # --------------------------------------------------------
-    #   Обновление UI
-    # --------------------------------------------------------
-    def refresh_dialog(self, dialog_id):
-        self.load_dialogs()
-        self.update_filter(self.search_box.text())
-        print(f"[OK] refresh_dialog: диалог {dialog_id} обновлён в UI.")
