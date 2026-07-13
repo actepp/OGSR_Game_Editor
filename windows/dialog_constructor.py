@@ -21,9 +21,15 @@ class DialogNode:
         self.height = 120
         self.header_height = 32
 
+        # dragging
         self.dragging = False
         self.drag_offset_x = 0
         self.drag_offset_y = 0
+
+        # resizing only bottom-right
+        self.resizing = False
+        self.resize_offset_x = 0
+        self.resize_offset_y = 0
 
     def rect(self):
         return QRectF(self.x, self.y, self.width, self.height)
@@ -38,7 +44,7 @@ class DialogNode:
 
 class InfiniteGridWidget(QWidget):
     """
-    Бесконечное поле с сеткой, панорамированием, зумом и узлами.
+    Бесконечное поле с сеткой, панорамированием, зумом, узлами и ресайзом.
     """
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -54,6 +60,9 @@ class InfiniteGridWidget(QWidget):
         self.nodes: list[DialogNode] = []
         self.active_node: DialogNode | None = None
 
+        self.resize_margin = 12  # зона нижнего правого угла
+
+
     # --------------------------------------------------------
     #   Добавление узла
     # --------------------------------------------------------
@@ -67,6 +76,20 @@ class InfiniteGridWidget(QWidget):
         node = DialogNode(dialog_id, world_x - 130, world_y - 60)
         self.nodes.append(node)
         self.update()
+
+
+    # --------------------------------------------------------
+    #   Проверка попадания в нижний правый угол
+    # --------------------------------------------------------
+    def is_in_resize_corner(self, node: DialogNode, wx: float, wy: float):
+        corner_x = node.x + node.width
+        corner_y = node.y + node.height
+
+        return (
+            abs(wx - corner_x) <= self.resize_margin and
+            abs(wy - corner_y) <= self.resize_margin
+        )
+
 
     # --------------------------------------------------------
     #   Рисование
@@ -114,7 +137,7 @@ class InfiniteGridWidget(QWidget):
             y += step
 
         # ----------------------------------------------------
-        #   Рисуем узлы (всегда поверх сетки)
+        #   Рисуем узлы
         # ----------------------------------------------------
         for node in self.nodes:
             sx = node.x * self.scale + self.offset_x
@@ -141,43 +164,84 @@ class InfiniteGridWidget(QWidget):
             painter.setFont(font)
             painter.drawText(header_rect, Qt.AlignmentFlag.AlignCenter, node.dialog_id)
 
+            # маленький квадратик в нижнем правом углу — маркер ресайза
+            resize_box = QRect(
+                int(sx + sw - 10 * self.scale),
+                int(sy + sh - 10 * self.scale),
+                int(10 * self.scale),
+                int(10 * self.scale)
+            )
+            painter.setBrush(QColor(120, 120, 120))
+            painter.drawRect(resize_box)
+
+
     # --------------------------------------------------------
-    #   Панорамирование + перетаскивание узлов
+    #   Панорамирование + перетаскивание + ресайз
     # --------------------------------------------------------
     def mousePressEvent(self, event):
         pos = event.position().toPoint()
 
-        # экран → мир
-        world_x = (pos.x() - self.offset_x) / self.scale
-        world_y = (pos.y() - self.offset_y) / self.scale
+        wx = (pos.x() - self.offset_x) / self.scale
+        wy = (pos.y() - self.offset_y) / self.scale
 
-        # проверяем попадание в шапку узла
-        for node in reversed(self.nodes):  # верхние узлы проверяем первыми
-            hr = node.header_rect()
-            if hr.contains(world_x, world_y):
+        for node in reversed(self.nodes):
+
+            # --- ресайз только за нижний правый угол ---
+            if self.is_in_resize_corner(node, wx, wy):
+                self.active_node = node
+                node.resizing = True
+                node.resize_offset_x = wx - (node.x + node.width)
+                node.resize_offset_y = wy - (node.y + node.height)
+                return
+
+            # --- перетаскивание за шапку ---
+            if node.header_rect().contains(wx, wy):
                 self.active_node = node
                 node.dragging = True
-                node.drag_offset_x = world_x - node.x
-                node.drag_offset_y = world_y - node.y
+                node.drag_offset_x = wx - node.x
+                node.drag_offset_y = wy - node.y
                 return
 
         # иначе — панорамирование
         if event.button() == Qt.MouseButton.LeftButton:
             self._last_mouse_pos = pos
 
+
     def mouseMoveEvent(self, event):
         pos = event.position().toPoint()
+        wx = (pos.x() - self.offset_x) / self.scale
+        wy = (pos.y() - self.offset_y) / self.scale
 
-        if self.active_node and self.active_node.dragging:
-            world_x = (pos.x() - self.offset_x) / self.scale
-            world_y = (pos.y() - self.offset_y) / self.scale
+        # ---------------------------
+        #   Ресайз узла (только bottom-right)
+        # ---------------------------
+        if self.active_node and self.active_node.resizing:
+            node = self.active_node
 
-            self.active_node.x = world_x - self.active_node.drag_offset_x
-            self.active_node.y = world_y - self.active_node.drag_offset_y
+            new_w = wx - node.x - node.resize_offset_x
+            new_h = wy - node.y - node.resize_offset_y
+
+            if new_w > 80:
+                node.width = new_w
+            if new_h > node.header_height + 40:
+                node.height = new_h
 
             self.update()
             return
 
+        # ---------------------------
+        #   Перетаскивание узла
+        # ---------------------------
+        if self.active_node and self.active_node.dragging:
+            node = self.active_node
+            node.x = wx - node.drag_offset_x
+            node.y = wy - node.drag_offset_y
+            self.update()
+            return
+
+        # ---------------------------
+        #   Панорамирование
+        # ---------------------------
         if self._last_mouse_pos is not None and event.buttons() & Qt.MouseButton.LeftButton:
             dx = pos.x() - self._last_mouse_pos.x()
             dy = pos.y() - self._last_mouse_pos.y()
@@ -188,13 +252,16 @@ class InfiniteGridWidget(QWidget):
             self._last_mouse_pos = pos
             self.update()
 
+
     def mouseReleaseEvent(self, event):
         if self.active_node:
             self.active_node.dragging = False
+            self.active_node.resizing = False
             self.active_node = None
 
         if event.button() == Qt.MouseButton.LeftButton:
             self._last_mouse_pos = None
+
 
     # --------------------------------------------------------
     #   Зум
@@ -275,6 +342,7 @@ class DialogConstructor(QWidget):
         self.all_dialogs: list[str] = []
         self.load_dialogs()
 
+
     # --------------------------------------------------------
     #   Загрузка списка диалогов
     # --------------------------------------------------------
@@ -289,6 +357,7 @@ class DialogConstructor(QWidget):
         for d in dialog_ids:
             self.dialog_list.addItem(d)
 
+
     # --------------------------------------------------------
     #   Фильтр
     # --------------------------------------------------------
@@ -299,6 +368,7 @@ class DialogConstructor(QWidget):
         for d in self.all_dialogs:
             if text in d.lower():
                 self.dialog_list.addItem(d)
+
 
     # --------------------------------------------------------
     #   Контекстное меню
@@ -323,6 +393,7 @@ class DialogConstructor(QWidget):
 
         menu.exec(self.dialog_list.mapToGlobal(position))
 
+
     # --------------------------------------------------------
     #   Двойной ЛКМ по списку
     # --------------------------------------------------------
@@ -330,11 +401,13 @@ class DialogConstructor(QWidget):
         dialog_id = item.text()
         self.open_dialog(dialog_id)
 
+
     # --------------------------------------------------------
     #   Открытие диалога → узел на сетке
     # --------------------------------------------------------
     def open_dialog(self, dialog_id: str):
         self.grid_view.add_node(dialog_id)
+
 
     # --------------------------------------------------------
     #   Свойства диалога
@@ -345,6 +418,7 @@ class DialogConstructor(QWidget):
 
         dlg = DialogProperties(self, dialog_data)
         dlg.show()
+
 
     # --------------------------------------------------------
     #   Сохранение
@@ -359,6 +433,7 @@ class DialogConstructor(QWidget):
         data = loader.get_dialog(dialog_id)
         loader.save_dialog(dialog_id, data)
 
+
     # --------------------------------------------------------
     #   Копирование Ctrl+C
     # --------------------------------------------------------
@@ -369,6 +444,7 @@ class DialogConstructor(QWidget):
                 QApplication.clipboard().setText(item.text())
         else:
             QListWidget.keyPressEvent(self.dialog_list, event)
+
 
     # --------------------------------------------------------
     #   Обновление UI
