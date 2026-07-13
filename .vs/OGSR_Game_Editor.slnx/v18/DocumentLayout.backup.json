@@ -7,12 +7,12 @@
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:windows\\dialog_properties.py||{8B382828-6202-11D1-8870-0000F87579D2}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_constructor.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:windows\\dialog_constructor.py||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\res_loader.py||{8B382828-6202-11D1-8870-0000F87579D2}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:res_loader.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_constructor.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:windows\\dialog_constructor.py||{8B382828-6202-11D1-8870-0000F87579D2}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\UI.py||{8B382828-6202-11D1-8870-0000F87579D2}",
@@ -62,15 +62,16 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 1,
               "Title": "res_loader.py",
               "DocumentMoniker": "E:\\GitHub\\OGSR_Game_Editor\\res_loader.py",
               "RelativeDocumentMoniker": "res_loader.py",
               "ToolTip": "E:\\GitHub\\OGSR_Game_Editor\\res_loader.py",
               "RelativeToolTip": "res_loader.py",
-              "ViewState": "AgIAAIwAAAAAAAAAAAAAAJUAAAAtAAAAAAAAAA==",
+              "ViewState": "AgIAAAQBAAAAAAAAAAAAwC0BAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-06-29T17:30:13.675Z"
+              "WhenOpened": "2026-06-29T17:30:13.675Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
@@ -134,7 +135,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 2,
               "Title": "dialog_constructor.py",
               "DocumentMoniker": "E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_constructor.py",
               "RelativeDocumentMoniker": "windows\\dialog_constructor.py",
@@ -152,7 +153,7 @@
               "RelativeDocumentMoniker": "windows\\dialog_properties.py",
               "ToolTip": "E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_properties.py",
               "RelativeToolTip": "windows\\dialog_properties.py",
-              "ViewState": "AgIAAEkCAAAAAAAAAAAAwGMCAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAIoAAAAAAAAAAAAjwKUAAAAkAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
               "WhenOpened": "2026-06-29T18:01:10.966Z",
               "EditorCaption": ""

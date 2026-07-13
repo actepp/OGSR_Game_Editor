@@ -14,7 +14,8 @@ EDIT_BUFFER = []
 TAG_MAP = {
     "Precondition": "precondition",
     "Has Info": "has_info",
-    "Dont Has Info": "dont_has_info"
+    "Dont Has Info": "dont_has_info",
+    "Script Dialog": "init_func"
 }
 
 
@@ -157,28 +158,40 @@ class EditableLabel(QLabel):
         self.dialog.active_label = self
 
     def finish_edit(self, editor):
+        # Если редактор уже удалён или сброшен — просто выходим
+        if self.dialog.active_editor is None or self.dialog.active_label is None:
+            return
+
         new_value = editor.text().strip()
         old_value = editor.old_value
         tag = self.tag
         xml_key = self.original_param
+
+        # Новый параметр (созданный пользователем)
         if self.original_param is None:
             index = self.grid.indexOf(editor)
             row, col, _, _ = self.grid.getItemPosition(index)
+
             self.grid.removeWidget(editor)
             editor.deleteLater()
+
             self.setText(new_value)
             self.grid.addWidget(self, row, col)
             self.show()
+
             self.dialog.active_editor = None
             self.dialog.active_label = None
             self.dialog.check_save_enabled()
             return
+
+        # Существующий параметр — проверяем изменения
         if old_value != new_value:
             pair = None
             for p in EDIT_BUFFER:
                 if p["old_param"] == xml_key:
                     pair = p
                     break
+
             if pair is not None:
                 pair["new_param"] = new_value
             else:
@@ -188,18 +201,24 @@ class EditableLabel(QLabel):
                     "old_param": xml_key,
                     "new_param": new_value
                 })
+
+        # Обновляем dialog_data
         self.on_commit(new_value)
+
+        # Возвращаем label на место
         index = self.grid.indexOf(editor)
         row, col, _, _ = self.grid.getItemPosition(index)
+
         self.grid.removeWidget(editor)
         editor.deleteLater()
+
         self.setText(new_value)
         self.grid.addWidget(self, row, col)
         self.show()
+
         self.dialog.active_editor = None
         self.dialog.active_label = None
         self.dialog.check_save_enabled()
-
 
 class DeleteButton(QPushButton):
     def __init__(self, on_delete):
@@ -330,6 +349,12 @@ class DialogProperties(QDialog):
             xml_tag="dont_has_info",
             commit_func=self.commit_dhi,
         )
+        self.render_section(
+            section_name="init_func",
+            xml_tag="init_func",
+            commit_func=self.commit_init_func,
+        )
+
         add_btn = AddButton(self.add_new_param)
         grid.addWidget(add_btn, self.current_row, 3)
         self.current_row += 1
@@ -428,6 +453,15 @@ class DialogProperties(QDialog):
 
     def commit_dhi(self, index, val):
         lst = self.dialog_data["dont_has_info"]
+        old = self.active_editor.old_value
+        try:
+            real_index = lst.index(old)
+            lst[real_index] = val.strip()
+        except ValueError:
+            pass
+
+    def commit_init_func(self, index, val):
+        lst = self.dialog_data["init_func"]
         old = self.active_editor.old_value
         try:
             real_index = lst.index(old)

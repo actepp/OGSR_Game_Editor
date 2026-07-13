@@ -60,11 +60,9 @@ class ResourceLoader:
                 with open(full_path, "r", encoding="utf-8") as f:
                     lines = f.readlines()
 
-                # --- Проходим по всем диалогам в файле ---
                 for dialog in root.findall("dialog"):
                     dialog_id = dialog.get("id")
 
-                    # --- Ищем начало диалога ---
                     start = None
                     pattern = rf'<dialog\s+[^>]*id="{dialog_id}"'
                     for i, line in enumerate(lines):
@@ -72,7 +70,6 @@ class ResourceLoader:
                             start = i
                             break
 
-                    # --- Ищем конец диалога ---
                     end = None
                     if start is not None:
                         for i in range(start + 1, len(lines)):
@@ -80,16 +77,14 @@ class ResourceLoader:
                                 end = i
                                 break
 
-                    # --- Fallback если не нашли границы ---
                     if start is None or end is None:
-                        print(f"[WARN] Диалог {dialog_id}: не удалось определить границы, fallback.")
                         start = 0
                         end = len(lines) - 1
 
-                    # --- Строим line_map только внутри диалога ---
                     pre_lines = []
                     has_lines = []
                     dont_lines = []
+                    init_lines = []
 
                     for i in range(start, end + 1):
                         line = lines[i]
@@ -99,8 +94,9 @@ class ResourceLoader:
                             has_lines.append(i)
                         if "<dont_has_info>" in line and "<phrase" not in line:
                             dont_lines.append(i)
+                        if "<init_func>" in line and "<phrase" not in line:
+                            init_lines.append(i)
 
-                    # --- Сохраняем диалог ---
                     self.dialogs[dialog_id] = {
                         "id": dialog_id,
                         "xml_path": full_path,
@@ -111,6 +107,7 @@ class ResourceLoader:
                             "pre": pre_lines,
                             "has": has_lines,
                             "dont": dont_lines,
+                            "init": init_lines,
                         }
                     }
 
@@ -138,13 +135,15 @@ class ResourceLoader:
         preconditions = [n.text for n in node.findall("precondition")]
         has_info = [n.text for n in node.findall("has_info")]
         dont_has_info = [n.text for n in node.findall("dont_has_info")]
+        init_func = [n.text for n in node.findall("init_func")]
 
         return {
             "id": dialog_id,
             "xml_path": data["xml_path"],
             "preconditions": preconditions,
             "has_info": has_info,
-            "dont_has_info": dont_has_info
+            "dont_has_info": dont_has_info,
+            "init_func": init_func
         }
 
     # ---------------------------------------------------------
@@ -155,10 +154,8 @@ class ResourceLoader:
         lines = entry["lines"]
         path = entry["xml_path"]
 
-        # строки, которые нужно удалить
         to_delete = new_data.get("_delete_lines", [])
 
-        # --- Ищем границы диалога ---
         start = None
         end = None
 
@@ -178,28 +175,22 @@ class ResourceLoader:
             print(f"[ERROR] save_dialog: cannot find dialog boundaries for {dialog_id}")
             return
 
-        # --- ЭТАП 1: применяем EDIT_BUFFER ТОЛЬКО внутри диалога ---
         global EDIT_BUFFER
 
         if EDIT_BUFFER:
-            print("[SAVE] Применяем EDIT_BUFFER к XML")
-
             for pair in EDIT_BUFFER:
                 old_tag   = pair["old_tag"]
                 new_tag   = pair["new_tag"]
                 old_param = pair["old_param"]
                 new_param = pair["new_param"]
 
-                # Формируем старую и новую строки полностью
                 old_line = f"<{old_tag}>{old_param}</{old_tag}>"
                 new_line = f"<{new_tag}>{new_param}</{new_tag}>"
 
                 found = False
 
-                # Ищем и заменяем ТОЛЬКО внутри диалога
                 for i in range(start, end + 1):
                     if old_line in lines[i]:
-                        print(f"[SAVE] Замена строки: {old_line} -> {new_line}")
                         lines[i] = lines[i].replace(old_line, new_line)
                         found = True
 
@@ -207,8 +198,6 @@ class ResourceLoader:
                     print(f"[ERROR] Строка '{old_line}' не найдена в диалоге — отмена сохранения")
                     return
 
-
-        # --- ЭТАП 2: удаляем строки ТОЛЬКО внутри диалога ---
         new_lines = []
 
         for i, line in enumerate(lines):
@@ -220,7 +209,6 @@ class ResourceLoader:
 
             new_lines.append(line)
 
-        # --- Сохраняем файл ---
         with open(path, "w", encoding="utf-8") as f:
             f.writelines(new_lines)
 
@@ -251,7 +239,6 @@ class ResourceLoader:
             print(f"[ERROR] reload_dialog: cannot read lines: {e}")
             return False
 
-        # --- Ищем диалог по ID ---
         dialog_node = None
         for d in root.findall("dialog"):
             if d.get("id") == dialog_id:
@@ -262,7 +249,6 @@ class ResourceLoader:
             print(f"[ERROR] reload_dialog: dialog '{dialog_id}' not found in XML")
             return False
 
-        # --- Ищем границы диалога ---
         start = None
         pattern = rf'<dialog\s+[^>]*id="{dialog_id}"'
         for i, line in enumerate(lines):
@@ -281,10 +267,10 @@ class ResourceLoader:
             start = 0
             end = len(lines) - 1
 
-        # --- Строим line_map ---
         pre_lines = []
         has_lines = []
         dont_lines = []
+        init_lines = []
 
         for i in range(start, end + 1):
             line = lines[i]
@@ -294,6 +280,8 @@ class ResourceLoader:
                 has_lines.append(i)
             if "<dont_has_info>" in line and "<phrase" not in line:
                 dont_lines.append(i)
+            if "<init_func>" in line and "<phrase" not in line:
+                init_lines.append(i)
 
         self.dialogs[dialog_id] = {
             "id": dialog_id,
@@ -305,6 +293,7 @@ class ResourceLoader:
                 "pre": pre_lines,
                 "has": has_lines,
                 "dont": dont_lines,
+                "init": init_lines,
             }
         }
 
