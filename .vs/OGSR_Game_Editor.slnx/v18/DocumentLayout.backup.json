@@ -70,8 +70,7 @@
               "RelativeToolTip": "res_loader.py",
               "ViewState": "AgIAAIwAAAAAAAAAAAAAAJUAAAAtAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-06-29T17:30:13.675Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-29T17:30:13.675Z"
             },
             {
               "$type": "Document",
@@ -107,8 +106,7 @@
               "RelativeToolTip": "OGSR_Game_Editor.py",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-06-29T04:39:15.504Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-29T04:39:15.504Z"
             },
             {
               "$type": "Document",
@@ -120,8 +118,7 @@
               "RelativeToolTip": "UI.py",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAsAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-06-29T04:42:10.698Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-29T04:42:10.698Z"
             },
             {
               "$type": "Document",
@@ -145,8 +142,7 @@
               "RelativeToolTip": "windows\\dialog_constructor.py",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-06-29T16:04:48.095Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-29T16:04:48.095Z"
             },
             {
               "$type": "Document",
@@ -156,7 +152,7 @@
               "RelativeDocumentMoniker": "windows\\dialog_properties.py",
               "ToolTip": "E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_properties.py",
               "RelativeToolTip": "windows\\dialog_properties.py",
-              "ViewState": "AgIAACYCAAAAAAAAAAAAwG8CAAAPAAAAAAAAAA==",
+              "ViewState": "AgIAAEkCAAAAAAAAAAAAwGMCAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
               "WhenOpened": "2026-06-29T18:01:10.966Z",
               "EditorCaption": ""

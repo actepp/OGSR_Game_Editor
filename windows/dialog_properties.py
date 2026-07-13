@@ -9,11 +9,8 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QObject, QEvent
 
-# Глобальный буфер изменений:
-# каждая запись: {old_tag, new_tag, old_param, new_param}
 EDIT_BUFFER = []
 
-# Доступные теги: GUI-имя -> XML-имя
 TAG_MAP = {
     "Precondition": "precondition",
     "Has Info": "has_info",
@@ -49,12 +46,10 @@ class EditLine(QLineEdit):
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self.clearFocus()
             return
-
         if event.key() == Qt.Key.Key_Escape:
             self.setText(self.label.text())
             self.dialog.cancel_edit()
             return
-
         super().keyPressEvent(event)
 
 
@@ -77,63 +72,57 @@ class TagCombo(QComboBox):
     def __init__(self, dialog, current_xml_tag, param_value):
         super().__init__()
         self.dialog = dialog
-
-        # param_value — это ОРИГИНАЛЬНЫЙ XML-параметр для этой строки
         self.original_param = param_value
-
-        gui_tag = None
-        for k, v in TAG_MAP.items():
-            if v == current_xml_tag:
-                gui_tag = k
-                break
-        if gui_tag is None:
-            gui_tag = list(TAG_MAP.keys())[0]
-
-        # Оригинальный XML-тег (из файла)
-        self.original_xml_tag = current_xml_tag
-        # Последний выбранный GUI-тег
-        self.old_gui_tag = gui_tag
-
+        if current_xml_tag is None:
+            gui_tag = "Precondition"
+            self.original_xml_tag = None
+            self.old_gui_tag = "Precondition"
+        else:
+            gui_tag = None
+            for k, v in TAG_MAP.items():
+                if v == current_xml_tag:
+                    gui_tag = k
+                    break
+            if gui_tag is None:
+                gui_tag = "Precondition"
+            self.original_xml_tag = current_xml_tag
+            self.old_gui_tag = gui_tag
         self.addItems(TAG_MAP.keys())
         self.setCurrentText(gui_tag)
-
         self.currentIndexChanged.connect(self.on_change)
 
     def on_change(self):
         new_gui_tag = self.currentText()
         new_xml = TAG_MAP[new_gui_tag]
+        if self.original_param is None and self.original_xml_tag is None:
+            self.old_gui_tag = new_gui_tag
+            self.dialog.check_save_enabled()
+            return
         old_xml = TAG_MAP[self.old_gui_tag]
-
-        # Ищем запись в буфере по ОРИГИНАЛЬНОМУ XML-параметру
         pair = None
         for p in EDIT_BUFFER:
             if p["old_param"] == self.original_param:
                 pair = p
                 break
-
-        # Если тег вернулся к исходному — просто сбрасываем new_tag в оригинальный
         if new_xml == self.original_xml_tag:
             if pair is not None:
                 pair["new_tag"] = self.original_xml_tag
-                # Если вообще никаких изменений (тег и параметр совпадают с оригиналом) — можно удалить запись
                 if pair["new_tag"] == pair["old_tag"] and pair["new_param"] == pair["old_param"]:
                     EDIT_BUFFER.remove(pair)
             self.old_gui_tag = new_gui_tag
+            self.dialog.check_save_enabled()
             return
-
-        # Если запись уже есть — обновляем только new_tag
         if pair is not None:
             pair["new_tag"] = new_xml
         else:
-            # Создаём новую запись: old_tag/old_param — всегда из XML
             EDIT_BUFFER.append({
                 "old_tag": self.original_xml_tag,
                 "new_tag": new_xml,
                 "old_param": self.original_param,
                 "new_param": self.original_param
             })
-
         self.old_gui_tag = new_gui_tag
+        self.dialog.check_save_enabled()
 
 
 class EditableLabel(QLabel):
@@ -145,9 +134,7 @@ class EditableLabel(QLabel):
         self.dialog = dialog
         self.setStyleSheet("padding: 2px;")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        # ОРИГИНАЛЬНЫЙ XML-параметр для этой строки
-        self.original_param = text
+        self.original_param = text if text != "" else None
 
     def mousePressEvent(self, event):
         if self.dialog.active_editor is not None:
@@ -158,72 +145,66 @@ class EditableLabel(QLabel):
         index = self.grid.indexOf(self)
         if index < 0:
             return
-
         row, col, _, _ = self.grid.getItemPosition(index)
-
         editor = EditLine(self.text(), self.dialog, self)
         editor.old_value = self.text()
         editor.editingFinished.connect(lambda: self.finish_edit(editor))
-
         self.grid.removeWidget(self)
         self.hide()
-
         self.grid.addWidget(editor, row, col)
         editor.setFocus()
-
         self.dialog.active_editor = editor
         self.dialog.active_label = self
 
     def finish_edit(self, editor):
         new_value = editor.text().strip()
-        old_value = editor.old_value  # предыдущее GUI-значение, чисто для сравнения
+        old_value = editor.old_value
         tag = self.tag
-
-        # Ключ для буфера — ОРИГИНАЛЬНЫЙ XML-параметр
         xml_key = self.original_param
-
+        if self.original_param is None:
+            index = self.grid.indexOf(editor)
+            row, col, _, _ = self.grid.getItemPosition(index)
+            self.grid.removeWidget(editor)
+            editor.deleteLater()
+            self.setText(new_value)
+            self.grid.addWidget(self, row, col)
+            self.show()
+            self.dialog.active_editor = None
+            self.dialog.active_label = None
+            self.dialog.check_save_enabled()
+            return
         if old_value != new_value:
-            # Ищем запись по old_param == ОРИГИНАЛЬНОМУ XML-параметру
             pair = None
             for p in EDIT_BUFFER:
                 if p["old_param"] == xml_key:
                     pair = p
                     break
-
             if pair is not None:
-                # Обновляем только new_param
                 pair["new_param"] = new_value
             else:
-                # Создаём новую запись: old_tag/old_param — всегда из XML
                 EDIT_BUFFER.append({
                     "old_tag": tag,
                     "new_tag": tag,
                     "old_param": xml_key,
                     "new_param": new_value
                 })
-
-        # Обновляем внутренние данные диалога (GUI-список)
         self.on_commit(new_value)
-
         index = self.grid.indexOf(editor)
         row, col, _, _ = self.grid.getItemPosition(index)
-
         self.grid.removeWidget(editor)
         editor.deleteLater()
-
         self.setText(new_value)
         self.grid.addWidget(self, row, col)
         self.show()
-
         self.dialog.active_editor = None
         self.dialog.active_label = None
+        self.dialog.check_save_enabled()
 
 
 class DeleteButton(QPushButton):
     def __init__(self, on_delete):
         super().__init__("–")
         self.on_delete = on_delete
-
         self.setFixedWidth(30)
         self.setStyleSheet("""
             QPushButton {
@@ -236,7 +217,6 @@ class DeleteButton(QPushButton):
                 background-color: #cc0000;
             }
         """)
-
         self.clicked.connect(self.on_delete)
 
 
@@ -244,7 +224,6 @@ class AddButton(QPushButton):
     def __init__(self, on_add):
         super().__init__("+")
         self.on_add = on_add
-
         self.setFixedWidth(30)
         self.setStyleSheet("""
             QPushButton {
@@ -257,39 +236,30 @@ class AddButton(QPushButton):
                 background-color: #00aa00;
             }
         """)
-
         self.clicked.connect(self.on_add)
 
 
 class DialogProperties(QDialog):
     def __init__(self, parent, dialog_data):
         super().__init__(parent)
-
         dialog_id = dialog_data["id"]
-
         self.active_editor = None
         self.active_label = None
-
-
+        self.new_rows = []
         dc = self.parent()
         mw = dc.parent()
         self.loader = mw.res_loader
         self.dialog_id = dialog_id
-
         self.loader.reload_dialog(dialog_id)
         self.dialog_data = self.loader.get_dialog(dialog_id)
         self.dialog_data["_delete_lines"] = []
-
         self.setWindowTitle(f"Свойства {dialog_id}")
         self.resize(650, 500)
         self.setWindowModality(Qt.WindowModality.WindowModal)
-
         self.filter = ClickFilter(self)
         self.installEventFilter(self.filter)
-
         main_layout = QVBoxLayout()
         self.setLayout(main_layout)
-
         self.grid = QGridLayout()
         grid = self.grid
         grid.setColumnStretch(0, 1)
@@ -297,25 +267,20 @@ class DialogProperties(QDialog):
         grid.setColumnStretch(2, 3)
         grid.setColumnStretch(3, 0)
         main_layout.addLayout(grid)
-
         row = 0
         self.current_row = row
-
         name_label = QLabel(dialog_id)
         name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         name_label.setStyleSheet("font-size: 16px; font-weight: bold; padding: 6px;")
         name_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         grid.addWidget(name_label, row, 0, 1, 4)
         row += 1
-        # --- NPC строка ---
         gameplay_path = os.path.join(self.loader.paths["configs/gameplay"])
         npc_name = find_npc_for_dialog(dialog_id, gameplay_path)
-
         npc_label = QLabel("NPC:")
         npc_label.setStyleSheet("font-weight: bold; padding: 4px;")
-
         npc_button = QPushButton(npc_name if npc_name else "Не найден")
-        npc_button.setEnabled(False)  # пока не кликабельная
+        npc_button.setEnabled(False)
         npc_button.setStyleSheet("""
             QPushButton {
                 background-color: #444;
@@ -324,100 +289,75 @@ class DialogProperties(QDialog):
                 border-radius: 4px;
             }
         """)
-
         grid.addWidget(npc_label, row, 0)
         grid.addWidget(make_vline(), row, 1)
         grid.addWidget(npc_button, row, 2, 1, 2)
         row += 1
-
         grid.addWidget(make_line(), row, 0, 1, 4)
         row += 1
-
         grid.addWidget(make_line(), row, 0, 1, 4)
         row += 1
-
-
-
         grid.addWidget(npc_label, row, 0)
         grid.addWidget(make_vline(), row, 1)
         grid.addWidget(npc_button, row, 2, 1, 2)
         row += 1
-
         grid.addWidget(make_line(), row, 0, 1, 4)
         row += 1
-
-
         xml_path = self.dialog_data["xml_path"].replace("\\", "/")
+        self.xml_path = xml_path
         grid.addWidget(QLabel("Путь:"), row, 0)
         grid.addWidget(make_vline(), row, 1)
-
         lbl_xml = QLabel(xml_path)
         lbl_xml.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         lbl_xml.setStyleSheet("color: #ccc;")
         grid.addWidget(lbl_xml, row, 2, 1, 2)
         row += 1
-
         grid.addWidget(make_line(), row, 0, 1, 4)
         row += 1
-
         self.current_row = row
-
         self.render_section(
             section_name="preconditions",
             xml_tag="precondition",
             commit_func=self.commit_pre,
         )
-
         self.render_section(
             section_name="has_info",
             xml_tag="has_info",
             commit_func=self.commit_hi,
         )
-
         self.render_section(
             section_name="dont_has_info",
             xml_tag="dont_has_info",
             commit_func=self.commit_dhi,
         )
-
         add_btn = AddButton(self.add_new_param)
         grid.addWidget(add_btn, self.current_row, 3)
         self.current_row += 1
-
         main_layout.addStretch()
-
         btn_layout = QHBoxLayout()
         main_layout.addLayout(btn_layout)
-
-        btn_save = QPushButton("Сохранить")
+        self.btn_save = QPushButton("Сохранить")
         btn_cancel = QPushButton("Отмена")
-
-        btn_save.clicked.connect(self.save_dialog)
-
+        self.btn_save.clicked.connect(self.save_dialog)
         def cancel_all():
             EDIT_BUFFER.clear()
             self.close()
-
         btn_cancel.clicked.connect(cancel_all)
-
         btn_layout.addStretch()
-        btn_layout.addWidget(btn_save)
+        btn_layout.addWidget(self.btn_save)
         btn_layout.addWidget(btn_cancel)
+        self.check_save_enabled()
 
     def render_section(self, section_name, xml_tag, commit_func):
         lst = self.dialog_data.get(section_name)
         if not lst:
             return
-
         grid = self.grid
         row = self.current_row
-
         for i, value in enumerate(lst):
-
             combo = TagCombo(self, xml_tag, value)
             grid.addWidget(combo, row, 0)
             grid.addWidget(make_vline(), row, 1)
-
             lbl = EditableLabel(
                 value,
                 grid,
@@ -425,7 +365,6 @@ class DialogProperties(QDialog):
                 self,
                 xml_tag
             )
-
             def delete_item(i=i, combo=combo, lbl=lbl, value=value):
                 if self.active_editor is not None and self.active_label is lbl:
                     editor = self.active_editor
@@ -436,30 +375,23 @@ class DialogProperties(QDialog):
                     editor.deleteLater()
                     self.active_editor = None
                     self.active_label = None
-
                 del_btn = self.sender()
-
                 pair = next(
                     (p for p in EDIT_BUFFER if p["old_param"] == lbl.original_param),
                     None
                 )
-
                 if pair:
                     tag_for_delete = pair["old_tag"]
                     param_for_delete = pair["old_param"]
                 else:
                     tag_for_delete = xml_tag
                     param_for_delete = value
-
                 line_text = f"<{tag_for_delete}>{param_for_delete}</{tag_for_delete}>"
                 self.dialog_data["_delete_lines"].append(line_text)
-
                 lst.pop(i)
-
                 combo.setParent(None)
                 lbl.setParent(None)
                 del_btn.setParent(None)
-
                 EDIT_BUFFER[:] = [
                     p for p in EDIT_BUFFER
                     if not (
@@ -467,16 +399,13 @@ class DialogProperties(QDialog):
                         p["new_param"] == lbl.original_param
                     )
                 ]
-
+                self.check_save_enabled()
             del_btn = DeleteButton(delete_item)
-
             grid.addWidget(lbl, row, 2)
             grid.addWidget(del_btn, row, 3)
-
             row += 1
             grid.addWidget(make_line(), row, 0, 1, 4)
             row += 1
-
         self.current_row = row
 
     def commit_pre(self, index, val):
@@ -506,44 +435,153 @@ class DialogProperties(QDialog):
         except ValueError:
             pass
 
+    def redraw_plus_button(self):
+        # Удаляем старый плюсик
+        for i in range(self.grid.count()):
+            w = self.grid.itemAt(i).widget()
+            if isinstance(w, AddButton):
+                w.setParent(None)
+                break
+
+        # Ставим новый плюсик внизу
+        add_btn = AddButton(self.add_new_param)
+        self.grid.addWidget(add_btn, self.current_row, 3)
+
     def add_new_param(self):
-        new_value = "new_param"
-        self.dialog_data["preconditions"].append(new_value)
-        self.close()
-        DialogProperties(self.parent(), self.dialog_data).show()
+        grid = self.grid
+        row = self.current_row
+
+        combo = TagCombo(self, None, None)
+        combo.setCurrentText("Precondition")
+        grid.addWidget(combo, row, 0)
+        grid.addWidget(make_vline(), row, 1)
+
+        lbl = EditableLabel(
+            "",
+            grid,
+            lambda v: None,
+            self,
+            None
+        )
+
+        def delete_new():
+            if self.active_editor is not None and self.active_label is lbl:
+                editor = self.active_editor
+                idx = grid.indexOf(editor)
+                if idx >= 0:
+                    r, c, _, _ = grid.getItemPosition(idx)
+                    grid.removeWidget(editor)
+                editor.deleteLater()
+                self.active_editor = None
+                self.active_label = None
+
+            del_btn = self.sender()
+            combo.setParent(None)
+            lbl.setParent(None)
+            del_btn.setParent(None)
+
+            self.new_rows = [
+                r for r in self.new_rows
+                if r["combo"] is not combo or r["label"] is not lbl
+            ]
+
+            self.check_save_enabled()
+
+            # Перерисовать плюсик после удаления
+            self.redraw_plus_button()
+
+        del_btn = DeleteButton(delete_new)
+
+        grid.addWidget(lbl, row, 2)
+        grid.addWidget(del_btn, row, 3)
+
+        row += 1
+        grid.addWidget(make_line(), row, 0, 1, 4)
+        row += 1
+
+        self.current_row = row
+        self.new_rows.append({"combo": combo, "label": lbl})
+
+        self.check_save_enabled()
+
+        # Переместить плюсик вниз
+        self.redraw_plus_button()
+
 
     def save_dialog(self):
         dc = self.parent()
         mw = dc.parent()
         loader = mw.res_loader
-
         dialog_id = self.dialog_data["id"]
-
         loader.save_dialog(dialog_id, self.dialog_data)
+        try:
+            with open(self.xml_path, "r", encoding="cp1251", errors="ignore") as f:
+                lines = f.readlines()
+        except Exception:
+            loader.reload_dialog(dialog_id)
+            dc.refresh_dialog(dialog_id)
+            EDIT_BUFFER.clear()
+            self.close()
+            return
+        dialog_start_idx = None
+        pattern = re.compile(r'<dialog\b[^>]*\bid="' + re.escape(dialog_id) + r'"')
+        for i, line in enumerate(lines):
+            if pattern.search(line):
+                dialog_start_idx = i
+                break
+        if dialog_start_idx is not None and self.new_rows:
+            if dialog_start_idx + 1 < len(lines):
+                indent_match = re.match(r'^(\s*)', lines[dialog_start_idx + 1])
+            else:
+                indent_match = re.match(r'^(\s*)', lines[dialog_start_idx])
+            indent = indent_match.group(1) if indent_match else "    "
+            new_lines = []
+            for row in self.new_rows:
+                combo = row["combo"]
+                label = row["label"]
+                gui_tag = combo.currentText()
+                xml_tag = TAG_MAP.get(gui_tag)
+                if xml_tag is None:
+                    continue
+                param_value = label.text().strip()
+                if not param_value:
+                    continue
+                new_lines.append(f"{indent}<{xml_tag}>{param_value}</{xml_tag}>\n")
+            insert_pos = dialog_start_idx + 1
+            lines[insert_pos:insert_pos] = new_lines
+            try:
+                with open(self.xml_path, "w", encoding="cp1251", errors="ignore") as f:
+                    f.writelines(lines)
+            except Exception:
+                pass
         loader.reload_dialog(dialog_id)
         dc.refresh_dialog(dialog_id)
-
         EDIT_BUFFER.clear()
+        self.new_rows.clear()
         self.close()
+
+    def check_save_enabled(self):
+        for row in self.new_rows:
+            label = row["label"]
+            if label.text().strip() == "":
+                self.btn_save.setEnabled(False)
+                return
+        self.btn_save.setEnabled(True)
 
     def cancel_edit(self):
         editor = self.active_editor
         label = self.active_label
-
         if editor is None or label is None:
             return
-
         index = self.grid.indexOf(editor)
         row, col, _, _ = self.grid.getItemPosition(index)
-
         self.grid.removeWidget(editor)
         editor.deleteLater()
-
         self.grid.addWidget(label, row, col)
         label.show()
-
         self.active_editor = None
         self.active_label = None
+        self.check_save_enabled()
 
     def finish_edit_external(self):
         if self.active_editor is not None:
@@ -563,62 +601,41 @@ class DialogProperties(QDialog):
         y = screen.y() + (screen.height() - self.height()) // 2
         self.move(x, y)
 
-def find_npc_for_dialog(dialog_id, gameplay_path):
-    """
-    Ищет НПС по диалогу в specific_characters_files.
-    Возвращает ИМЕННО ID NPC (из атрибута id="...").
-    """
 
+def find_npc_for_dialog(dialog_id, gameplay_path):
     npc_dir = os.path.join(gameplay_path, "specific_characters_files")
     if not os.path.exists(npc_dir):
         return None
-
-    # Регулярки
     re_char_start = re.compile(r'\s*<specific_character\b[^>]*id="([^"]+)"', re.IGNORECASE)
-    re_actor      = re.compile(r'<actor_dialog>(.*?)</actor_dialog>', re.IGNORECASE)
-    re_start      = re.compile(r'<start_dialog>(.*?)</start_dialog>', re.IGNORECASE)
-
+    re_actor = re.compile(r'<actor_dialog>(.*?)</actor_dialog>', re.IGNORECASE)
+    re_start = re.compile(r'<start_dialog>(.*?)</start_dialog>', re.IGNORECASE)
     for filename in os.listdir(npc_dir):
         if not filename.endswith(".xml"):
             continue
-
         full_path = os.path.join(npc_dir, filename)
-
         try:
             with open(full_path, "r", encoding="cp1251", errors="ignore") as f:
                 lines = f.readlines()
         except:
             continue
-
         inside_character = False
         current_npc_id = None
-
         for line in lines:
-
-            # Начало блока NPC
             m_start = re_char_start.search(line)
             if m_start:
                 inside_character = True
                 current_npc_id = m_start.group(1)
                 continue
-
-            # Конец блока NPC
             if inside_character and "</specific_character>" in line:
                 inside_character = False
                 current_npc_id = None
                 continue
-
             if not inside_character:
                 continue
-
-            # actor_dialog
             m_actor = re_actor.search(line)
             if m_actor and m_actor.group(1) == dialog_id:
                 return current_npc_id
-
-            # start_dialog
             m_start_d = re_start.search(line)
             if m_start_d and m_start_d.group(1) == dialog_id:
                 return current_npc_id
-
     return None
