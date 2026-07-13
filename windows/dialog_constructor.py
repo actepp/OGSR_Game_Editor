@@ -1,12 +1,15 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QWidget, QVBoxLayout, QHBoxLayout,
     QListWidget, QLineEdit, QSplitter, QMenu, QApplication
 )
 from PyQt6.QtGui import QAction, QPainter, QPen, QColor, QFont
 from PyQt6.QtCore import Qt, QPoint, QRectF, QRect
 from windows.dialog_properties import DialogProperties
+from windows.dialog_node_logic import DialogNodeLogic
+
 
 AVAILABLE_LOCALES = ["rus", "eng"]
+
 
 # ============================================================
 #   Узел диалога (квадратик)
@@ -43,6 +46,11 @@ class DialogNode:
         # визуальная реакция кнопок
         self.pressed_left_button = False
         self.pressed_right_button = False
+
+        # логика
+        self.logic_text_real = ""
+        self.logic_next = None
+        self.logic_id = None  # id фразы
 
     def locale_button_rect(self):
         return QRectF(
@@ -117,6 +125,48 @@ class InfiniteGridWidget(QWidget):
 
         return int(base * (1.5 + (3 - 1.5) * 0.4))  # фиксируем максимум
 
+    def spawn_graph(self, graph):
+        self.nodes.clear()
+
+        x = 50
+        y = 50
+
+        # создаём квадратики
+        for pid in sorted(graph.phrases.keys()):
+            phrase = graph.phrases[pid]
+
+            node = DialogNode(f"{graph.dialog_id}:{pid}", x, y)
+            node.logic_id = pid
+            node.logic_text_real = phrase.text_real
+            node.logic_next = int(phrase.next) if phrase.next else None
+
+            self.nodes.append(node)
+
+            # смещаем вправо
+            x += 320
+
+        self.update()
+
+    def find_node_by_phrase_id(self, pid):
+        for n in self.nodes:
+            if n.logic_id == pid:
+                return n
+        return None
+
+    def draw_link(self, painter: QPainter, node: DialogNode, target: DialogNode):
+        if not target:
+            return
+
+        pen = QPen(QColor(200, 200, 80), 2)
+        painter.setPen(pen)
+
+        sx = (node.x + node.width) * self.scale + self.offset_x
+        sy = (node.y + node.height / 2) * self.scale + self.offset_y
+
+        tx = (target.x) * self.scale + self.offset_x
+        ty = (target.y + target.header_height / 2) * self.scale + self.offset_y
+
+        painter.drawLine(int(sx), int(sy), int(tx), int(ty))
 
     # --------------------------------------------------------
     #   Добавление узла
@@ -132,7 +182,6 @@ class InfiniteGridWidget(QWidget):
         self.nodes.append(node)
         self.update()
 
-
     # --------------------------------------------------------
     #   Проверка попадания в нижний правый угол
     # --------------------------------------------------------
@@ -144,7 +193,6 @@ class InfiniteGridWidget(QWidget):
             abs(wx - corner_x) <= self.resize_margin and
             abs(wy - corner_y) <= self.resize_margin
         )
-
 
     # --------------------------------------------------------
     #   Рисование
@@ -213,13 +261,26 @@ class InfiniteGridWidget(QWidget):
             painter.setBrush(QColor(55, 55, 55))
             painter.drawRect(header_rect)
 
-            # текст
+            # текст в шапке
             painter.setPen(QPen(QColor(230, 230, 230)))
             app_font = self.get_app_font()
             font = QFont(app_font.family(), self.smart_font_size(app_font.pointSize()))
-
             painter.setFont(font)
             painter.drawText(header_rect, Qt.AlignmentFlag.AlignCenter, node.dialog_id)
+
+            # рабочая область — текст фразы
+            text_rect = QRect(
+                int(sx),
+                int(sy + node.header_height * self.scale),
+                int(sw),
+                int(sh - node.header_height * self.scale)
+            )
+
+            painter.drawText(
+                text_rect,
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
+                node.logic_text_real
+            )
 
             # ------------------------------------------------
             #   ЛЕВАЯ КНОПКА — галочка
@@ -236,9 +297,9 @@ class InfiniteGridWidget(QWidget):
             painter.drawRect(lb_sx, lb_sy, lb_sw, lb_sh)
 
             painter.setPen(QPen(QColor(255, 255, 255), 2))
-            painter.drawLine(lb_sx + 4, lb_sy + lb_sh//2,
-                             lb_sx + lb_sw//2, lb_sy + lb_sh - 4)
-            painter.drawLine(lb_sx + lb_sw//2, lb_sy + lb_sh - 4,
+            painter.drawLine(lb_sx + 4, lb_sy + lb_sh // 2,
+                             lb_sx + lb_sw // 2, lb_sy + lb_sh - 4)
+            painter.drawLine(lb_sx + lb_sw // 2, lb_sy + lb_sh - 4,
                              lb_sx + lb_sw - 4, lb_sy + 4)
 
             # ------------------------------------------------
@@ -278,7 +339,9 @@ class InfiniteGridWidget(QWidget):
             app_font = self.get_app_font()
             font = QFont(app_font.family(), self.smart_font_size(app_font.pointSize()))
             painter.setFont(font)
-            painter.drawText(QRect(loc_sx, loc_sy, loc_sw, loc_sh), Qt.AlignmentFlag.AlignCenter, node.locale.upper())
+            painter.drawText(QRect(loc_sx, loc_sy, loc_sw, loc_sh),
+                             Qt.AlignmentFlag.AlignCenter,
+                             node.locale.upper())
 
             # ------------------------------------------------
             #   ВЫПАДАЮЩИЙ СПИСОК ЛОКАЛЕЙ
@@ -299,10 +362,8 @@ class InfiniteGridWidget(QWidget):
 
                     painter.setPen(QPen(QColor(220, 220, 220)))
 
-                    # Умный шрифт
                     app_font = self.get_app_font()
                     font = QFont(app_font.family(), self.smart_font_size(app_font.pointSize()))
-
                     painter.setFont(font)
 
                     painter.drawText(
@@ -316,7 +377,6 @@ class InfiniteGridWidget(QWidget):
                         f"  {lang.upper()}"
                     )
 
-
             # ------------------------------------------------
             #   Треугольник ресайза
             # ------------------------------------------------
@@ -329,6 +389,13 @@ class InfiniteGridWidget(QWidget):
             painter.setBrush(QColor(160, 160, 160))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawPolygon(p1, p2, p3)
+
+            # ------------------------------------------------
+            #   Линки между узлами
+            # ------------------------------------------------
+            if node.logic_next is not None:
+                target = self.find_node_by_phrase_id(node.logic_next)
+                self.draw_link(painter, node, target)
 
     # --------------------------------------------------------
     #   Панорамирование + перетаскивание + ресайз + кнопки
@@ -400,7 +467,6 @@ class InfiniteGridWidget(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             self._last_mouse_pos = pos
 
-
     def mouseMoveEvent(self, event):
         pos = event.position().toPoint()
         wx = (pos.x() - self.offset_x) / self.scale
@@ -446,7 +512,6 @@ class InfiniteGridWidget(QWidget):
             self._last_mouse_pos = pos
             self.update()
 
-
     def mouseReleaseEvent(self, event):
         # кнопки — отпускание
         wx = (event.position().x() - self.offset_x) / self.scale
@@ -481,7 +546,6 @@ class InfiniteGridWidget(QWidget):
 
         if event.button() == Qt.MouseButton.LeftButton:
             self._last_mouse_pos = None
-
 
     # --------------------------------------------------------
     #   Зум
@@ -562,7 +626,6 @@ class DialogConstructor(QWidget):
         self.all_dialogs: list[str] = []
         self.load_dialogs()
 
-
     # --------------------------------------------------------
     #   Загрузка списка диалогов
     # --------------------------------------------------------
@@ -577,7 +640,6 @@ class DialogConstructor(QWidget):
         for d in dialog_ids:
             self.dialog_list.addItem(d)
 
-
     # --------------------------------------------------------
     #   Фильтр
     # --------------------------------------------------------
@@ -588,7 +650,6 @@ class DialogConstructor(QWidget):
         for d in self.all_dialogs:
             if text in d.lower():
                 self.dialog_list.addItem(d)
-
 
     # --------------------------------------------------------
     #   Контекстное меню
@@ -613,7 +674,6 @@ class DialogConstructor(QWidget):
 
         menu.exec(self.dialog_list.mapToGlobal(position))
 
-
     # --------------------------------------------------------
     #   Двойной ЛКМ по списку
     # --------------------------------------------------------
@@ -621,13 +681,22 @@ class DialogConstructor(QWidget):
         dialog_id = item.text()
         self.open_dialog(dialog_id)
 
-
     # --------------------------------------------------------
-    #   Открытие диалога → узел на сетке
+    #   Открытие диалога → узлы на сетке
     # --------------------------------------------------------
     def open_dialog(self, dialog_id: str):
-        self.grid_view.add_node(dialog_id)
+        loader = self.parent().res_loader
 
+        # получаем данные диалога
+        dialog_data = loader.get_dialog(dialog_id)
+        dialog_xml = dialog_data["xml_node"]
+
+        # пути берём из loader
+        logic = DialogNodeLogic(loader.paths["configs/text"])
+
+        graph = logic.build_graph(dialog_xml, locale="rus")
+
+        self.grid_view.spawn_graph(graph)
 
     # --------------------------------------------------------
     #   Свойства диалога
@@ -638,7 +707,6 @@ class DialogConstructor(QWidget):
 
         dlg = DialogProperties(self, dialog_data)
         dlg.show()
-
 
     # --------------------------------------------------------
     #   Сохранение
@@ -653,10 +721,12 @@ class DialogConstructor(QWidget):
         data = loader.get_dialog(dialog_id)
         loader.save_dialog(dialog_id, data)
 
-
     # --------------------------------------------------------
     #   Копирование Ctrl+C
     # --------------------------------------------------------
     def _list_key_press(self, event):
         if event.key() == Qt.Key.Key_C and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             item = self.dialog_list.currentItem()
+            if item:
+                # тут можешь добавить копирование id в буфер, если нужно
+                print(f"[INFO] Copied dialog id: {item.text()}")

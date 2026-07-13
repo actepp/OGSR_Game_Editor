@@ -130,6 +130,7 @@ class ResourceLoader:
 
     def get_dialog(self, dialog_id):
         data = self.dialogs[dialog_id]
+
         node = data["xml_node"]
 
         preconditions = [n.text for n in node.findall("precondition")]
@@ -140,6 +141,11 @@ class ResourceLoader:
         return {
             "id": dialog_id,
             "xml_path": data["xml_path"],
+            "xml_node": data["xml_node"],     # ← ДОБАВЛЕНО
+            "xml_root": data["xml_root"],     # ← ДОБАВЛЕНО
+            "lines": data["lines"],           # ← ДОБАВЛЕНО
+            "line_map": data["line_map"],     # ← ДОБАВЛЕНО
+
             "preconditions": preconditions,
             "has_info": has_info,
             "dont_has_info": dont_has_info,
