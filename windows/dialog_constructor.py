@@ -317,11 +317,10 @@ class InfiniteGridWidget(QWidget):
                     )
 
 
-
             # ------------------------------------------------
             #   Треугольник ресайза
             # ------------------------------------------------
-            tri_size = 14 * self.scale
+            tri_size = 12 * self.scale
 
             p1 = QPoint(int(sx + sw), int(sy + sh))
             p2 = QPoint(int(sx + sw - tri_size), int(sy + sh))
@@ -330,7 +329,6 @@ class InfiniteGridWidget(QWidget):
             painter.setBrush(QColor(160, 160, 160))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawPolygon(p1, p2, p3)
-
 
     # --------------------------------------------------------
     #   Панорамирование + перетаскивание + ресайз + кнопки

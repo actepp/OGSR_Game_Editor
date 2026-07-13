@@ -179,10 +179,36 @@ class SettingsDialog(QDialog):
         lbl_size = QLabel("Размер шрифта:")
         row_size.addWidget(lbl_size)
 
+        # 🔥 фикс кликабельности кнопки "увеличить"
+        QApplication.setStyle("Fusion")
+
         self.size_spin = QSpinBox()
         self.size_spin.setRange(6, 40)
         self.size_spin.setValue(self.font_settings["size"])
         row_size.addWidget(self.size_spin)
+        self.size_spin.setStyleSheet("""
+            QSpinBox {
+                min-height: 32px;
+                height: 32px;
+                font-size: 16px;
+            }
+            QSpinBox::up-button {
+                width: 24px;
+                height: 16px;
+            }
+            QSpinBox::down-button {
+                width: 24px;
+                height: 16px;
+            }
+            QSpinBox::up-arrow {
+                width: 12px;
+                height: 12px;
+            }
+            QSpinBox::down-arrow {
+                width: 12px;
+                height: 12px;
+            }
+        """)
 
         self.content_layout.addLayout(row_size)
 
