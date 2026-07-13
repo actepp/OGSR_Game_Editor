@@ -128,12 +128,48 @@ class InfiniteGridWidget(QWidget):
     def spawn_graph(self, graph):
         self.nodes.clear()
 
-        x = 50
-        y = 50
+        # строим дерево: pid -> children list
+        children = {}
+        for pid, phrase in graph.phrases.items():
+            nxt = phrase.next
+            if nxt is not None:
+                nxt = int(nxt)
+                children.setdefault(pid, []).append(nxt)
 
-        # создаём квадратики
-        for pid in sorted(graph.phrases.keys()):
-            phrase = graph.phrases[pid]
+        # координаты узлов
+        positions = {}
+
+        # рекурсивная раскладка
+        def layout(pid, x, y):
+            positions[pid] = (x, y)
+
+            if pid not in children:
+                return
+
+            kids = children[pid]
+            count = len(kids)
+
+            # ширина между ветками
+            spread = 320
+
+            # если один ребёнок — прямо под родителем
+            if count == 1:
+                layout(kids[0], x, y + 200)
+                return
+
+            # если несколько — раскладываем веером
+            start_x = x - (spread * (count - 1)) // 2
+
+            for i, kid in enumerate(kids):
+                layout(kid, start_x + spread * i, y + 200)
+
+        # стартуем с минимального pid (обычно 0)
+        root_pid = min(graph.phrases.keys())
+        layout(root_pid, 50, 50)
+
+        # создаём узлы
+        for pid, phrase in graph.phrases.items():
+            x, y = positions[pid]
 
             node = DialogNode(f"{graph.dialog_id}:{pid}", x, y)
             node.logic_id = pid
@@ -142,10 +178,8 @@ class InfiniteGridWidget(QWidget):
 
             self.nodes.append(node)
 
-            # смещаем вправо
-            x += 320
-
         self.update()
+
 
     def find_node_by_phrase_id(self, pid):
         for n in self.nodes:
@@ -153,20 +187,62 @@ class InfiniteGridWidget(QWidget):
                 return n
         return None
 
-    def draw_link(self, painter: QPainter, node: DialogNode, target: DialogNode):
+    def draw_link(self, painter, node, target):
         if not target:
             return
 
+        # центры узлов
+        node_cx = node.x + node.width / 2
+        node_cy = node.y + node.height / 2
+
+        target_cx = target.x + target.width / 2
+        target_cy = target.y + target.height / 2
+
+        # определяем направление
+        dx = target_cx - node_cx
+        dy = target_cy - node_cy
+
+        # выбираем точку выхода
+        if abs(dx) > abs(dy):
+            # горизонтальное направление
+            if dx > 0:
+                # target справа
+                start_x = node.x + node.width
+                start_y = node_cy
+                end_x = target.x
+                end_y = target_cy
+            else:
+                # target слева
+                start_x = node.x
+                start_y = node_cy
+                end_x = target.x + target.width
+                end_y = target_cy
+        else:
+            # вертикальное направление
+            if dy > 0:
+                # target ниже
+                start_x = node_cx
+                start_y = node.y + node.height
+                end_x = target_cx
+                end_y = target.y
+            else:
+                # target выше
+                start_x = node_cx
+                start_y = node.y
+                end_x = target_cx
+                end_y = target.y + target.height
+
+        # масштабируем
+        sx = start_x * self.scale + self.offset_x
+        sy = start_y * self.scale + self.offset_y
+        tx = end_x * self.scale + self.offset_x
+        ty = end_y * self.scale + self.offset_y
+
+        # рисуем линию
         pen = QPen(QColor(200, 200, 80), 2)
         painter.setPen(pen)
-
-        sx = (node.x + node.width) * self.scale + self.offset_x
-        sy = (node.y + node.height / 2) * self.scale + self.offset_y
-
-        tx = (target.x) * self.scale + self.offset_x
-        ty = (target.y + target.header_height / 2) * self.scale + self.offset_y
-
         painter.drawLine(int(sx), int(sy), int(tx), int(ty))
+
 
     # --------------------------------------------------------
     #   Добавление узла
