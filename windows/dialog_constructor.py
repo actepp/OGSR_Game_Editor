@@ -128,7 +128,7 @@ class InfiniteGridWidget(QWidget):
     def spawn_graph(self, graph):
         self.nodes.clear()
 
-        # строим дерево: pid -> children list
+        # строим карту детей
         children = {}
         for pid, phrase in graph.phrases.items():
             nxt = phrase.next
@@ -136,11 +136,12 @@ class InfiniteGridWidget(QWidget):
                 nxt = int(nxt)
                 children.setdefault(pid, []).append(nxt)
 
-        # координаты узлов
         positions = {}
 
-        # рекурсивная раскладка
+        # раскладка одного дерева
         def layout(pid, x, y):
+            if pid in positions:
+                return
             positions[pid] = (x, y)
 
             if pid not in children:
@@ -148,24 +149,34 @@ class InfiniteGridWidget(QWidget):
 
             kids = children[pid]
             count = len(kids)
-
-            # ширина между ветками
             spread = 320
 
-            # если один ребёнок — прямо под родителем
             if count == 1:
                 layout(kids[0], x, y + 200)
                 return
 
-            # если несколько — раскладываем веером
             start_x = x - (spread * (count - 1)) // 2
-
             for i, kid in enumerate(kids):
                 layout(kid, start_x + spread * i, y + 200)
 
-        # стартуем с минимального pid (обычно 0)
-        root_pid = min(graph.phrases.keys())
-        layout(root_pid, 50, 50)
+        # ищем корни — фразы без родителя
+        all_pids = set(graph.phrases.keys())
+        child_pids = {int(p.next) for p in graph.phrases.values() if p.next}
+        root_candidates = list(all_pids - child_pids)
+
+        # раскладываем каждое дерево отдельно
+        offset_x = 50
+        for root in sorted(root_candidates):
+            layout(root, offset_x, 50)
+            offset_x += 500
+
+        # раскладываем висячие узлы
+        orphan_x = offset_x
+        orphan_y = 50
+        for pid in sorted(all_pids):
+            if pid not in positions:
+                positions[pid] = (orphan_x, orphan_y)
+                orphan_y += 200
 
         # создаём узлы
         for pid, phrase in graph.phrases.items():
@@ -179,6 +190,7 @@ class InfiniteGridWidget(QWidget):
             self.nodes.append(node)
 
         self.update()
+
 
 
     def find_node_by_phrase_id(self, pid):
