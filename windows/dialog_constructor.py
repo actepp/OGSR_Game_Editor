@@ -164,15 +164,17 @@ class InfiniteGridWidget(QWidget):
             painter.setFont(font)
             painter.drawText(header_rect, Qt.AlignmentFlag.AlignCenter, node.dialog_id)
 
-            # маленький квадратик в нижнем правом углу — маркер ресайза
-            resize_box = QRect(
-                int(sx + sw - 10 * self.scale),
-                int(sy + sh - 10 * self.scale),
-                int(10 * self.scale),
-                int(10 * self.scale)
-            )
-            painter.setBrush(QColor(120, 120, 120))
-            painter.drawRect(resize_box)
+            # треугольник в нижнем правом углу
+            tri_size = 14 * self.scale
+
+            p1 = QPoint(int(sx + sw), int(sy + sh))                      # нижний правый угол
+            p2 = QPoint(int(sx + sw - tri_size), int(sy + sh))           # влево
+            p3 = QPoint(int(sx + sw), int(sy + sh - tri_size))           # вверх
+
+            painter.setBrush(QColor(160, 160, 160))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawPolygon(p1, p2, p3)
+
 
 
     # --------------------------------------------------------
