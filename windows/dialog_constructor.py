@@ -402,12 +402,15 @@ class InfiniteGridWidget(QWidget):
             painter.drawText(header_rect, Qt.AlignmentFlag.AlignCenter, node.dialog_id)
 
             # --- область текста ---
+            left_padding = 8 * self.scale
+
             text_rect = QRect(
-                int(sx),
+                int(sx + left_padding),
                 int(sy + node.header_height * self.scale),
-                int(sw),
+                int(sw - left_padding),
                 int(sh - node.header_height * self.scale)
             )
+
 
             # включаем обрезку по рамке узла
             painter.save()
@@ -425,14 +428,14 @@ class InfiniteGridWidget(QWidget):
                 line = layout.createLine()
                 if not line.isValid():
                     break
-                line.setLineWidth(sw)  # ширина квадратика
+                line.setLineWidth(sw - left_padding)  # ширина квадратика
                 lines.append(line)
             layout.endLayout()
 
             # рисуем построчно
             y_offset = sy + node.header_height * self.scale + 4
             for line in lines:
-                line.draw(painter, QPointF(sx, y_offset))
+                line.draw(painter, QPointF(sx + left_padding, y_offset))
                 y_offset += line.height()
 
             painter.restore()
