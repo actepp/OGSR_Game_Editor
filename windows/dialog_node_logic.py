@@ -37,6 +37,7 @@ class DialogNodeLogic:
         self.string_table = {}  # id → {"rus": "...", "eng": "..."}
 
         self._load_string_table()
+        self.text_key = ""
 
     # ---------------------------------------------------------
     #   Загрузка всех текстов из configs/text/*.xml

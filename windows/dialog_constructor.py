@@ -6,7 +6,8 @@ from PyQt6.QtGui import QAction, QPainter, QPen, QColor, QFont
 from PyQt6.QtCore import Qt, QPoint, QRectF, QRect
 from windows.dialog_properties import DialogProperties
 from windows.dialog_node_logic import DialogNodeLogic
-
+from PyQt6.QtGui import QTextLayout, QTextOption
+from PyQt6.QtCore import QPointF
 
 AVAILABLE_LOCALES = ["rus", "eng"]
 
@@ -54,8 +55,8 @@ class DialogNode:
 
     def locale_button_rect(self):
         return QRectF(
-            self.x + self.width - self.locale_button_size - 6,
-            self.y + self.header_height + 4,
+            self.x + 4 + self.left_button_size + 6,
+            self.y + (self.header_height - self.locale_button_size) / 2,
             self.locale_button_size,
             self.locale_button_size
         )
@@ -184,10 +185,17 @@ class InfiniteGridWidget(QWidget):
 
             node = DialogNode(f"{graph.dialog_id}:{pid}", x, y)
             node.logic_id = pid
+
+            # ключ текста — нужен для переключения локали
+            node.text_key = phrase.text_key
+
+            # текст по умолчанию (rus)
             node.logic_text_real = phrase.text_real
+
             node.logic_next = int(phrase.next) if phrase.next else None
 
             self.nodes.append(node)
+
 
         self.update()
 
@@ -393,7 +401,7 @@ class InfiniteGridWidget(QWidget):
             painter.setFont(font)
             painter.drawText(header_rect, Qt.AlignmentFlag.AlignCenter, node.dialog_id)
 
-            # рабочая область — текст фразы
+            # --- область текста ---
             text_rect = QRect(
                 int(sx),
                 int(sy + node.header_height * self.scale),
@@ -401,11 +409,33 @@ class InfiniteGridWidget(QWidget):
                 int(sh - node.header_height * self.scale)
             )
 
-            painter.drawText(
-                text_rect,
-                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
-                node.logic_text_real
-            )
+            # включаем обрезку по рамке узла
+            painter.save()
+            painter.setClipRect(text_rect)
+
+            # --- Автоперенос текста ---
+            layout = QTextLayout(node.logic_text_real, painter.font())
+            opt = QTextOption()
+            opt.setWrapMode(QTextOption.WrapMode.WordWrap)
+            layout.setTextOption(opt)
+
+            layout.beginLayout()
+            lines = []
+            while True:
+                line = layout.createLine()
+                if not line.isValid():
+                    break
+                line.setLineWidth(sw)  # ширина квадратика
+                lines.append(line)
+            layout.endLayout()
+
+            # рисуем построчно
+            y_offset = sy + node.header_height * self.scale + 4
+            for line in lines:
+                line.draw(painter, QPointF(sx, y_offset))
+                y_offset += line.height()
+
+            painter.restore()
 
             # ------------------------------------------------
             #   ЛЕВАЯ КНОПКА — галочка
@@ -455,6 +485,7 @@ class InfiniteGridWidget(QWidget):
             loc_sy = int(loc.y() * self.scale + self.offset_y)
             loc_sw = int(loc.width() * self.scale)
             loc_sh = int(loc.height() * self.scale)
+
 
             painter.setBrush(QColor(70, 70, 120))
             painter.setPen(QPen(QColor(40, 40, 80)))
@@ -551,7 +582,12 @@ class InfiniteGridWidget(QWidget):
                     index = int((wy - box_y) // 22)
                     if 0 <= index < len(AVAILABLE_LOCALES):
                         node.locale = AVAILABLE_LOCALES[index]
-                        print(f"[OK] Locale changed for {node.dialog_id}: {node.locale}")
+
+                        # 🔥 ПЕРЕЗАГРУЗКА ТЕКСТА ПО ЛОКАЛИ
+                        logic = DialogNodeLogic(self.constructor.parent().res_loader.paths["configs/text"])
+                        new_text = logic.resolve_text(node.text_key, node.locale)
+                        node.logic_text_real = new_text if new_text.strip() else "NONE"
+
                     node.locale_open = False
                     self.update()
                     return
@@ -740,7 +776,6 @@ class DialogConstructor(QWidget):
         super().__init__(parent)
 
         self.modified = False
-
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
         main_layout = QHBoxLayout()
@@ -781,7 +816,7 @@ class DialogConstructor(QWidget):
 
         splitter.addWidget(right_container)
         splitter.setSizes([300, 900])
-
+        self.grid_view.constructor = self
         self.all_dialogs: list[str] = []
         self.load_dialogs()
 
