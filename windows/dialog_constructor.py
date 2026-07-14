@@ -25,6 +25,7 @@ class DialogNode:
 
         self.editing = False
         self.editor = None
+        self.modified = False
 
         self.locale = "rus"   # локаль по умолчанию
         self.locale_open = False
@@ -391,6 +392,15 @@ class InfiniteGridWidget(QWidget):
             painter.setBrush(QColor(40, 40, 40))
             painter.drawRect(rect)
 
+            # ------------------------------------------------
+            #   ПОДСВЕТКА НЕСОХРАНЁННОГО СОСТОЯНИЯ
+            # ------------------------------------------------
+            if node.modified:
+                glow_color = QColor(80, 200, 80, 180)  # чуть ярче и плотнее
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.setPen(QPen(glow_color, 5))    # толщина рамки увеличена
+                painter.drawRect(rect)
+
             # шапка
             painter.setPen(QPen(QColor(200, 200, 200)))
             painter.setBrush(QColor(55, 55, 55))
@@ -612,6 +622,11 @@ class InfiniteGridWidget(QWidget):
         node.editor.deleteLater()
         node.editor = None
         node.editing = False
+
+        if not save:
+            node.modified = True
+        else:
+            node.modified = False
 
         if save:
             print("try to save")
@@ -851,7 +866,7 @@ class InfiniteGridWidget(QWidget):
 
                 if node.left_button_rect().contains(wx, wy):
                     print(f"[OK] SAVE clicked for {node.dialog_id}")
-
+                    node.modified = False
                     # если редактор открыт — закрыть и сохранить
                     if node.editing:
                         self.finish_editing(node, save=True)
