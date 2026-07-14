@@ -1,161 +1,78 @@
-from PyQt6.QtWidgets import QApplication
-
-# -----------------------------
-# ТЁМНАЯ ТЕМА
-# -----------------------------
-DARK_THEME = """
-QWidget {
-    background-color: #2b2b2b;
-    color: #e6e6e6;
-}
-
-/* Верхнее меню */
-QMenuBar {
-    background-color: #3c3c3c;
-    color: #ffffff;
-    border-bottom: 1px solid #555;
-}
-
-QMenuBar::item {
-    background-color: transparent;from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QTextEdit, QPushButton, QHBoxLayout
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
+from PyQt6.QtCore import Qt
 
 class PhraseProperties(QDialog):
     def __init__(self, parent, node):
         super().__init__(parent)
         self.node = node
 
-        self.setWindowTitle(f"Фраза: {node.text_key}")
-        self.resize(600, 400)
+        # глобальная таблица тегов GUI → XML
+        self.tag_map = {
+            "Give info": "give_info",
+            "Disable info": "disable_info",
+            "Action": "action",
+            "Precondition": "precondition"
+        }
 
+        # окно поверх всех
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self.setWindowTitle("Свойства фразы")
+        self.resize(500, 300)
+
+        # основной layout
         layout = QVBoxLayout()
         self.setLayout(layout)
 
-        layout.addWidget(QLabel(f"Ключ: {node.text_key}"))
-        layout.addWidget(QLabel(f"Локаль: {node.locale.upper()}"))
+        # --- ШАПКА ---
+        title = QLabel(f"{node.text_key}")
+        title.setStyleSheet("font-size: 16px; font-weight: bold;")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
 
-        self.text_edit = QTextEdit()
-        self.text_edit.setPlainText(node.logic_text_real)
-        layout.addWidget(self.text_edit)
+        # --- ГОРИЗОНТАЛЬНАЯ ЛИНИЯ ---
+        line = QLabel()
+        line.setFixedHeight(1)
+        line.setStyleSheet("background-color: rgb(120, 120, 120);")
+        layout.addWidget(line)
 
-        btns = QHBoxLayout()
-        layout.addLayout(btns)
+        # --- КОНТЕЙНЕР ДЛЯ СВОЙСТВ ---
+        self.props_layout = QVBoxLayout()
+        layout.addLayout(self.props_layout)
 
-        btn_save = QPushButton("Сохранить")
-        btn_cancel = QPushButton("Отмена")
+        # тестовые строки (позже заменим на реальные данные)
+        for gui_name, xml_tag in self.tag_map.items():
+            row = QHBoxLayout()
 
-        btns.addWidget(btn_save)
-        btns.addWidget(btn_cancel)
+            lbl = QLabel(gui_name)
+            lbl.setStyleSheet("color: white; font-size: 14px;")
+            row.addWidget(lbl)
 
-        btn_cancel.clicked.connect(self.close)
-        btn_save.clicked.connect(self.save_phrase)
+            edit = QLabel("...")  # позже заменим на QLineEdit
+            edit.setStyleSheet("color: #ccc; padding-left: 10px;")
+            row.addWidget(edit, 1)
 
-    def save_phrase(self):
-        new_text = self.text_edit.toPlainText().strip()
-        self.node.logic_text_real = new_text
-        self.close()
+            btn_del = QLabel("✖")
+            btn_del.setStyleSheet("color: red; font-weight: bold; padding: 4px;")
+            row.addWidget(btn_del)
 
-    padding: 4px 10px;
-}
+            self.props_layout.addLayout(row)
 
-QMenuBar::item:selected {
-    background-color: #505050;
-}
+        # --- ПЛЮСИК ---
+        plus_row = QHBoxLayout()
+        plus_row.addStretch()
 
-/* Выпадающие меню */
-QMenu {
-    background-color: #3c3c3c;
-    color: #ffffff;
-    border: 1px solid #555;
-}
+        btn_plus = QLabel("➕")
+        btn_plus.setStyleSheet("color: #4caf50; font-size: 18px; font-weight: bold; padding: 4px;")
+        plus_row.addWidget(btn_plus)
 
-QMenu::item:selected {
-    background-color: #505050;
-}
+        self.props_layout.addLayout(plus_row)
 
-/* Кнопки */
-QPushButton {
-    background-color: #3c3c3c;
-    color: #ffffff;
-    border: 1px solid #555;
-    padding: 5px;
-}
+        # нижняя панель с кнопкой закрытия
+        btn_layout = QHBoxLayout()
+        layout.addLayout(btn_layout)
 
-QPushButton:hover {
-    background-color: #505050;
-}
+        btn_layout.addStretch()
 
-/* Поля ввода */
-QLineEdit, QListWidget, QSpinBox, QFontComboBox {
-    background-color: #3c3c3c;
-    color: #ffffff;
-    border: 1px solid #555;
-}
-"""
-
-
-# -----------------------------
-# СВЕТЛАЯ ТЕМА
-# -----------------------------
-LIGHT_THEME = """
-QWidget {
-    background-color: #ffffff;
-    color: #202020;
-}
-
-/* Верхнее меню */
-QMenuBar {
-    background-color: #e0e0e0;
-    color: #202020;
-    border-bottom: 1px solid #b0b0b0;
-}
-
-QMenuBar::item {
-    background-color: transparent;
-    padding: 4px 10px;
-}
-
-QMenuBar::item:selected {
-    background-color: #d0d0d0;
-}
-
-/* Выпадающие меню */
-QMenu {
-    background-color: #ffffff;
-    color: #202020;
-    border: 1px solid #b0b0b0;
-}
-
-QMenu::item:selected {
-    background-color: #e0e0e0;
-}
-
-/* Кнопки */
-QPushButton {
-    background-color: #e0e0e0;
-    color: #202020;
-    border: 1px solid #aaa;
-    padding: 5px;
-}
-
-QPushButton:hover {
-    background-color: #d0d0d0;
-}
-
-/* Поля ввода */
-QLineEdit, QListWidget, QSpinBox, QFontComboBox {
-    background-color: #ffffff;
-    color: #202020;
-    border: 1px solid #aaa;
-}
-"""
-
-
-# -----------------------------
-# ПРИМЕНЕНИЕ ТЕМЫ
-# -----------------------------
-def apply_theme(theme_name: str):
-    app = QApplication.instance()
-    if theme_name == "dark":
-        app.setStyleSheet(DARK_THEME)
-    else:
-        app.setStyleSheet(LIGHT_THEME)
+        btn_close = QPushButton("Закрыть")
+        btn_close.clicked.connect(self.close)
+        btn_layout.addWidget(btn_close)
