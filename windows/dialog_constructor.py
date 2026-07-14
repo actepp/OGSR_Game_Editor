@@ -700,7 +700,8 @@ class InfiniteGridWidget(QWidget):
 
                 except Exception as e:
                     print(f"[ERROR] Cannot update locale file {filename}: {e}")
-
+            print("[finish_editing] calling save_node_locale()")
+            self.save_node_locale(node)
     # --------------------------------------------------------
     #   Панорамирование + перетаскивание + ресайз + кнопки
     # --------------------------------------------------------
@@ -710,23 +711,27 @@ class InfiniteGridWidget(QWidget):
         wx = (pos.x() - self.offset_x) / self.scale
         wy = (pos.y() - self.offset_y) / self.scale
 
+        print(f"\n=== [PRESS] ({wx:.1f}, {wy:.1f}) ===")
+
         # --- закрытие активного редактора ---
         for n in self.nodes:
             if n.editing and n.editor:
+                print(f"[PRESS] Editor active on node {n.dialog_id}:{n.logic_id}")
 
-                # если клик по галочке — НЕ закрывать редактор
+                # логируем попадание в галку
                 if n.left_button_rect().contains(wx, wy):
-                    # галочка должна работать дальше в основном цикле
+                    print("[PRESS] Click on CHECKBOX while editor open → DO NOT close editor")
                     break
 
-                # если клик ВНУТРИ редактора — ничего не делаем
+                # логируем попадание внутрь редактора
                 if n.editor.geometry().contains(event.position().toPoint()):
+                    print("[PRESS] Click INSIDE editor → DO NOT close editor")
                     break
 
-                # иначе — клик вне → закрыть редактор
+                # логируем закрытие редактора
+                print("[PRESS] Click OUTSIDE editor → closing editor (save=False)")
                 self.finish_editing(n, save=False)
                 break
-
 
         for node in reversed(self.nodes):
 
@@ -734,12 +739,13 @@ class InfiniteGridWidget(QWidget):
             #   1) КНОПКА ЛОКАЛИ
             # ============================================================
             if node.locale_button_rect().contains(wx, wy):
+                print(f"[PRESS] Locale button on {node.dialog_id}:{node.logic_id}")
                 node.locale_open = not node.locale_open
                 self.update()
                 return
 
             # ============================================================
-            #   2) СПИСОК ЛОКАЛЕЙ (ДОЛЖЕН БЫТЬ ДО ТЕКСТА!)
+            #   2) СПИСОК ЛОКАЛЕЙ
             # ============================================================
             if node.locale_open:
                 loc = node.locale_button_rect()
@@ -748,8 +754,8 @@ class InfiniteGridWidget(QWidget):
                 box_w = 80
                 box_h = len(AVAILABLE_LOCALES) * 22
 
-                # клик внутри списка
                 if QRectF(box_x, box_y, box_w, box_h).contains(wx, wy):
+                    print(f"[PRESS] Locale list click on {node.dialog_id}:{node.logic_id}")
                     index = int((wy - box_y) // 22)
                     if 0 <= index < len(AVAILABLE_LOCALES):
                         node.locale = AVAILABLE_LOCALES[index]
@@ -762,11 +768,15 @@ class InfiniteGridWidget(QWidget):
                     self.update()
                     return
 
-                # клик вне списка — закрыть
+                print("[PRESS] Click outside locale list → closing list")
                 node.locale_open = False
                 self.update()
 
+            # ============================================================
+            #   РЕСАЙЗ
+            # ============================================================
             if self.is_in_resize_corner(node, wx, wy):
+                print(f"[PRESS] Resize start on {node.dialog_id}:{node.logic_id}")
                 self.active_node = node
                 node.resizing = True
                 node.resize_offset_x = wx - (node.x + node.width)
@@ -784,32 +794,46 @@ class InfiniteGridWidget(QWidget):
             )
 
             if text_rect.contains(wx, wy):
+                print(f"[PRESS] Text area click on {node.dialog_id}:{node.logic_id}")
                 if event.type() == QEvent.Type.MouseButtonDblClick and \
                    event.button() == Qt.MouseButton.LeftButton:
+                    print("[PRESS] Double click → start editing")
                     self.start_editing(node)
                 return
 
             # ============================================================
-            #   4) Остальные кнопки
+            #   4) ГАЛОЧКА
             # ============================================================
             if node.left_button_rect().contains(wx, wy):
+                print(f"[PRESS] CHECKBOX pressed for {node.dialog_id}:{node.logic_id}")
                 node.pressed_left_button = True
                 self.update()
                 return
 
-            # --- шестерёнка ---
+            # ============================================================
+            #   5) ШЕСТЕРЁНКА
+            # ============================================================
             if node.settings_button_rect().contains(wx, wy):
+                print(f"[PRESS] Settings button on {node.dialog_id}:{node.logic_id}")
                 from windows.phrase_properties import PhraseProperties
                 dlg = PhraseProperties(self.constructor.window(), node)
                 dlg.show()
                 return
 
+            # ============================================================
+            #   6) КРЕСТИК
+            # ============================================================
             if node.right_button_rect().contains(wx, wy):
+                print(f"[PRESS] CLOSE pressed for {node.dialog_id}:{node.logic_id}")
                 node.pressed_right_button = True
                 self.update()
                 return
 
+            # ============================================================
+            #   7) ПЕРЕТАСКИВАНИЕ
+            # ============================================================
             if node.header_rect().contains(wx, wy):
+                print(f"[PRESS] Drag start on {node.dialog_id}:{node.logic_id}")
                 self.active_node = node
                 node.dragging = True
                 node.drag_offset_x = wx - node.x
@@ -818,8 +842,8 @@ class InfiniteGridWidget(QWidget):
 
         # панорамирование
         if event.button() == Qt.MouseButton.LeftButton:
+            print("[PRESS] Panning start")
             self._last_mouse_pos = pos
-
 
     def start_editing(self, node):
         if node.editing:
@@ -889,45 +913,44 @@ class InfiniteGridWidget(QWidget):
             self.update()
 
     def mouseReleaseEvent(self, event):
-        # кнопки — отпускание
         wx = (event.position().x() - self.offset_x) / self.scale
         wy = (event.position().y() - self.offset_y) / self.scale
+
+        print(f"\n=== [RELEASE] ({wx:.1f}, {wy:.1f}) ===")
 
         for node in list(self.nodes):
 
             # --- галочка ---
-            if node.pressed_left_button:
-                node.pressed_left_button = False
+            if node.left_button_rect().contains(wx, wy):
+                print(f"[RELEASE] CHECKBOX released for {node.dialog_id}:{node.logic_id}")
+                print(f"[RELEASE] node.editing={node.editing}")
 
-                if node.left_button_rect().contains(wx, wy):
-                    print(f"[OK] SAVE clicked for {node.dialog_id}")
-                    node.modified = False
-                    # если редактор открыт — закрыть и сохранить
-                    if node.editing:
-                        self.finish_editing(node, save=True)
-                    else:
-                        # редактор закрыт — просто сохранить локаль
-                        self.save_node_locale(node)
+                if node.editing:
+                    print("[RELEASE] Editor open → finish_editing(save=True)")
+                    self.finish_editing(node, save=True)
+                else:
+                    print("[RELEASE] Editor closed → save_node_locale()")
+                    self.save_node_locale(node)
 
+                node.modified = False
                 self.update()
+                return
 
             # --- крестик ---
-            if node.pressed_right_button:
-                node.pressed_right_button = False
-
-                if node.right_button_rect().contains(wx, wy):
-                    print(f"[OK] CLOSE clicked for {node.dialog_id}")
-                    self.delete_branch(node)
-                    return
-
+            if node.right_button_rect().contains(wx, wy):
+                print(f"[RELEASE] CLOSE released for {node.dialog_id}:{node.logic_id}")
+                self.delete_branch(node)
                 self.update()
+                return
 
         if self.active_node:
+            print(f"[RELEASE] Stop dragging/resizing for {self.active_node.dialog_id}:{self.active_node.logic_id}")
             self.active_node.dragging = False
             self.active_node.resizing = False
             self.active_node = None
 
         if event.button() == Qt.MouseButton.LeftButton:
+            print("[RELEASE] End panning")
             self._last_mouse_pos = None
 
     def save_node_locale(self, node):
