@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt, QPoint, QRectF, QRect
 from windows.dialog_properties import DialogProperties
 from windows.dialog_node_logic import DialogNodeLogic
 from PyQt6.QtGui import QTextLayout, QTextOption
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QEvent
 import os
 import re
 
@@ -620,41 +620,28 @@ class InfiniteGridWidget(QWidget):
         wx = (pos.x() - self.offset_x) / self.scale
         wy = (pos.y() - self.offset_y) / self.scale
 
-        # если есть активный редактор и клик вне него — закрыть
+        # --- закрытие активного редактора ---
         for n in self.nodes:
             if n.editing and n.editor:
-                wx = (event.position().x() - self.offset_x) / self.scale
-                wy = (event.position().y() - self.offset_y) / self.scale
-
-                # если клик по галочке — НЕ закрываем редактор
                 if n.left_button_rect().contains(wx, wy):
                     break
-
-                # если клик вне редактора — закрываем
                 if not n.editor.geometry().contains(event.position().toPoint()):
                     self.finish_editing(n, save=False)
                     break
 
         for node in reversed(self.nodes):
-            # --- клик по тексту нода ---
-            text_rect = QRectF(
-                node.x,
-                node.y + node.header_height,
-                node.width,
-                node.height - node.header_height
-            )
 
-            if text_rect.contains(wx, wy):
-                self.start_editing(node)
-                return
-
-            # --- кнопка локали ---
+            # ============================================================
+            #   1) КНОПКА ЛОКАЛИ
+            # ============================================================
             if node.locale_button_rect().contains(wx, wy):
                 node.locale_open = not node.locale_open
                 self.update()
                 return
 
-            # --- выбор локали ---
+            # ============================================================
+            #   2) СПИСОК ЛОКАЛЕЙ (ДОЛЖЕН БЫТЬ ДО ТЕКСТА!)
+            # ============================================================
             if node.locale_open:
                 loc = node.locale_button_rect()
                 box_x = loc.x()
@@ -662,12 +649,12 @@ class InfiniteGridWidget(QWidget):
                 box_w = 80
                 box_h = len(AVAILABLE_LOCALES) * 22
 
+                # клик внутри списка
                 if QRectF(box_x, box_y, box_w, box_h).contains(wx, wy):
                     index = int((wy - box_y) // 22)
                     if 0 <= index < len(AVAILABLE_LOCALES):
                         node.locale = AVAILABLE_LOCALES[index]
 
-                        # 🔥 ПЕРЕЗАГРУЗКА ТЕКСТА ПО ЛОКАЛИ
                         logic = DialogNodeLogic(self.constructor.parent().res_loader.paths["configs/text"])
                         new_text = logic.resolve_text(node.text_key, node.locale)
                         node.logic_text_real = new_text if new_text.strip() else "NONE"
@@ -680,19 +667,35 @@ class InfiniteGridWidget(QWidget):
                 node.locale_open = False
                 self.update()
 
-            # --- кнопка галочки ---
+            # ============================================================
+            #   3) ДВОЙНОЙ КЛИК ПО ТЕКСТУ
+            # ============================================================
+            text_rect = QRectF(
+                node.x,
+                node.y + node.header_height,
+                node.width,
+                node.height - node.header_height
+            )
+
+            if text_rect.contains(wx, wy):
+                if event.type() == QEvent.Type.MouseButtonDblClick and \
+                   event.button() == Qt.MouseButton.LeftButton:
+                    self.start_editing(node)
+                return
+
+            # ============================================================
+            #   4) Остальные кнопки
+            # ============================================================
             if node.left_button_rect().contains(wx, wy):
                 node.pressed_left_button = True
                 self.update()
                 return
 
-            # --- кнопка крестика ---
             if node.right_button_rect().contains(wx, wy):
                 node.pressed_right_button = True
                 self.update()
                 return
 
-            # --- ресайз ---
             if self.is_in_resize_corner(node, wx, wy):
                 self.active_node = node
                 node.resizing = True
@@ -700,7 +703,6 @@ class InfiniteGridWidget(QWidget):
                 node.resize_offset_y = wy - (node.y + node.height)
                 return
 
-            # --- перетаскивание за шапку ---
             if node.header_rect().contains(wx, wy):
                 self.active_node = node
                 node.dragging = True
@@ -708,9 +710,10 @@ class InfiniteGridWidget(QWidget):
                 node.drag_offset_y = wy - node.y
                 return
 
-        # иначе — панорамирование
+        # панорамирование
         if event.button() == Qt.MouseButton.LeftButton:
             self._last_mouse_pos = pos
+
 
     def start_editing(self, node):
         if node.editing:
