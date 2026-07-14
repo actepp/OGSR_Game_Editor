@@ -392,7 +392,7 @@ class InfiniteGridWidget(QWidget):
             app_font = self.get_app_font()
             font = QFont(app_font.family(), self.smart_font_size(app_font.pointSize()))
             painter.setFont(font)
-            painter.drawText(header_rect, Qt.AlignmentFlag.AlignCenter, node.dialog_id)
+            painter.drawText(header_rect, Qt.AlignmentFlag.AlignCenter, node.text_key)
 
             # --- область текста ---
             left_padding = 8 * self.scale
@@ -819,6 +819,36 @@ class DialogConstructor(QWidget):
         self.all_dialogs: list[str] = []
         self.load_dialogs()
 
+    def refresh_dialog(self, dialog_id):
+        mw = self.parent()
+        loader = mw.res_loader
+
+        # перезагрузка XML
+        loader.reload_dialog(dialog_id)
+
+        # обновление списка диалогов
+        self.update_filter("")
+
+        # получить путь к XML
+        dialog_data = loader.get_dialog(dialog_id)
+        xml_path = dialog_data["xml_path"]
+
+        # загрузить XML вручную
+        import xml.etree.ElementTree as ET
+        try:
+            xml_root = ET.parse(xml_path).getroot()
+
+            # построить граф
+            logic = DialogNodeLogic(loader.paths["configs/text"])
+            graph = logic.build_graph(xml_root)
+
+            # перерисовать
+            self.grid_view.spawn_graph(graph)
+
+        except Exception as e:
+            print("[WARN] refresh_dialog failed:", e)
+
+
     # --------------------------------------------------------
     #   Загрузка списка диалогов
     # --------------------------------------------------------
@@ -866,6 +896,7 @@ class DialogConstructor(QWidget):
         props_action.triggered.connect(lambda: self.show_properties(dialog_id))
 
         menu.exec(self.dialog_list.mapToGlobal(position))
+
 
     # --------------------------------------------------------
     #   Двойной ЛКМ по списку
