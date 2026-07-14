@@ -757,6 +757,13 @@ class InfiniteGridWidget(QWidget):
                 node.locale_open = False
                 self.update()
 
+            if self.is_in_resize_corner(node, wx, wy):
+                self.active_node = node
+                node.resizing = True
+                node.resize_offset_x = wx - (node.x + node.width)
+                node.resize_offset_y = wy - (node.y + node.height)
+                return
+
             # ============================================================
             #   3) ДВОЙНОЙ КЛИК ПО ТЕКСТУ
             # ============================================================
@@ -791,13 +798,6 @@ class InfiniteGridWidget(QWidget):
             if node.right_button_rect().contains(wx, wy):
                 node.pressed_right_button = True
                 self.update()
-                return
-
-            if self.is_in_resize_corner(node, wx, wy):
-                self.active_node = node
-                node.resizing = True
-                node.resize_offset_x = wx - (node.x + node.width)
-                node.resize_offset_y = wy - (node.y + node.height)
                 return
 
             if node.header_rect().contains(wx, wy):
