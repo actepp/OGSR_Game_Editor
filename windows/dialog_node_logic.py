@@ -9,9 +9,9 @@ import xml.etree.ElementTree as ET
 class PhraseNode:
     def __init__(self, pid: int):
         self.id = pid
-        self.text_key = ""      # ключ из <text>
-        self.text_real = ""     # реальный текст из configs/text
-        self.next = None        # id следующей фразы
+        self.text_key = ""          # ключ из <text>
+        self.text_real = ""         # реальный текст из configs/text
+        self.next_list: list[int] = []   # список детей (несколько <next>)
 
 
 # ============================================================
@@ -109,8 +109,11 @@ class DialogNodeLogic:
             # реальный текст
             node.text_real = self.resolve_text(node.text_key, locale)
 
-            # связь next
-            node.next = phrase.findtext("next")
+            # собираем ВСЕ <next>
+            node.next_list = [
+                int(n.text) for n in phrase.findall("next")
+                if n.text and n.text.strip()
+            ]
 
             graph.phrases[pid] = node
 

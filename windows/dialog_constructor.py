@@ -132,10 +132,8 @@ class InfiniteGridWidget(QWidget):
         # строим карту детей
         children = {}
         for pid, phrase in graph.phrases.items():
-            nxt = phrase.next
-            if nxt is not None:
-                nxt = int(nxt)
-                children.setdefault(pid, []).append(nxt)
+            for nxt in phrase.next_list:
+                children.setdefault(pid, []).append(int(nxt))
 
         positions = {}
 
@@ -162,7 +160,7 @@ class InfiniteGridWidget(QWidget):
 
         # ищем корни — фразы без родителя
         all_pids = set(graph.phrases.keys())
-        child_pids = {int(p.next) for p in graph.phrases.values() if p.next}
+        child_pids = {n for phrase in graph.phrases.values() for n in phrase.next_list}
         root_candidates = list(all_pids - child_pids)
 
         # раскладываем каждое дерево отдельно
@@ -186,19 +184,14 @@ class InfiniteGridWidget(QWidget):
             node = DialogNode(f"{graph.dialog_id}:{pid}", x, y)
             node.logic_id = pid
 
-            # ключ текста — нужен для переключения локали
             node.text_key = phrase.text_key
-
-            # текст по умолчанию (rus)
             node.logic_text_real = phrase.text_real
 
-            node.logic_next = int(phrase.next) if phrase.next else None
+            node.logic_next_list = phrase.next_list
 
             self.nodes.append(node)
 
-
         self.update()
-
 
 
     def find_node_by_phrase_id(self, pid):
@@ -552,9 +545,11 @@ class InfiniteGridWidget(QWidget):
             # ------------------------------------------------
             #   Линки между узлами
             # ------------------------------------------------
-            if node.logic_next is not None:
-                target = self.find_node_by_phrase_id(node.logic_next)
-                self.draw_link(painter, node, target)
+            for nxt in node.logic_next_list:
+                target = self.find_node_by_phrase_id(nxt)
+                if target:
+                    self.draw_link(painter, node, target)
+
 
     # --------------------------------------------------------
     #   Панорамирование + перетаскивание + ресайз + кнопки
@@ -737,11 +732,12 @@ class InfiniteGridWidget(QWidget):
 
             # если у узла есть дети
             for n in self.nodes:
-                if n.logic_id == cur and n.logic_next is not None:
-                    child = n.logic_next
-                    if child not in result:
-                        result.add(child)
-                        stack.append(child)
+                if n.logic_id == cur:
+                    for child in n.logic_next_list:
+                        if child not in result:
+                            result.add(child)
+                            stack.append(child)
+
 
         return result
 
