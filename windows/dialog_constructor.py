@@ -122,8 +122,27 @@ class InfiniteGridWidget(QWidget):
 
         self.resize_margin = 12  # зона нижнего правого угла
 
+    def find_main_window(self):
+        mw = self.parent()
+        while mw is not None:
+            if hasattr(mw, "res_loader"):
+                return mw
+            mw = mw.parent()
+        return None
+
     def get_app_font(self):
         return QApplication.instance().font()
+
+    def update_editor_geometry(self, node):
+        if not node.editing or not node.editor:
+            return
+
+        sx = node.x * self.scale + self.offset_x
+        sy = node.y * self.scale + self.offset_y + node.header_height * self.scale
+        sw = node.width * self.scale
+        sh = node.height * self.scale - node.header_height * self.scale
+
+        node.editor.setGeometry(int(sx), int(sy), int(sw), int(sh))
 
     def smart_font_size(self, base: int) -> int:
         """
@@ -384,6 +403,8 @@ class InfiniteGridWidget(QWidget):
             sw = node.width * self.scale
             sh = node.height * self.scale
 
+            self.update_editor_geometry(node)
+
             rect = QRect(int(sx), int(sy), int(sw), int(sh))
             header_rect = QRect(int(sx), int(sy), int(sw), int(node.header_height * self.scale))
 
@@ -631,8 +652,13 @@ class InfiniteGridWidget(QWidget):
         if save:
             print("try to save")
             # сохраняем в XML локали
-            mw = self.parent().parent()
+            mw = self.find_main_window()
+            if mw is None:
+                print("[ERROR] Cannot find MainWindow for saving locale")
+                return
+
             loader = mw.res_loader
+
 
             text_root = loader.paths["configs/text"]
 
