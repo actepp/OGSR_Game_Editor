@@ -9,7 +9,7 @@ from windows.dialog_node_logic import DialogNodeLogic
 from PyQt6.QtGui import QTextLayout, QTextOption
 from PyQt6.QtCore import QPointF, QEvent
 import os
-import re
+import math
 
 AVAILABLE_LOCALES = ["rus", "eng"]
 
@@ -57,6 +57,15 @@ class DialogNode:
         self.logic_text_real = ""
         self.logic_next = None
         self.logic_id = None  # id фразы
+
+    def settings_button_rect(self):
+        size = self.right_button_size
+        return QRectF(
+            self.x + self.width - size*2 - 8,   # ← слева от крестика
+            self.y + (self.header_height - size) / 2,
+            size,
+            size
+        )
 
     def locale_button_rect(self):
         return QRectF(
@@ -459,6 +468,54 @@ class InfiniteGridWidget(QWidget):
                              lb_sx + lb_sw - 4, lb_sy + 4)
 
             # ------------------------------------------------
+            #   КНОПКА ШЕСТЕРЁНКИ
+            # ------------------------------------------------
+            sb = node.settings_button_rect()
+            sb_sx = int(sb.x() * self.scale + self.offset_x)
+            sb_sy = int(sb.y() * self.scale + self.offset_y)
+            sb_sw = int(sb.width() * self.scale)
+            sb_sh = int(sb.height() * self.scale)
+
+
+
+            # координаты центра
+            cx = sb_sx + sb_sw / 2
+            cy = sb_sy + sb_sh / 2
+
+            # радиусы
+            outer_r = sb_sw / 2 - 2
+            inner_r = outer_r * 0.55
+            tooth_r1 = outer_r * 0.85
+            tooth_r2 = outer_r
+
+            # рисуем зубцы
+            painter.setPen(QPen(QColor(230, 230, 230), 2))
+
+            for angle in range(0, 360, 30):  # зубцов больше → выглядит как шестерёнка
+                rad = angle * math.pi / 180
+
+                # внутренняя точка зубца
+                x1 = cx + tooth_r1 * math.cos(rad)
+                y1 = cy + tooth_r1 * math.sin(rad)
+
+                # внешняя точка зубца
+                x2 = cx + tooth_r2 * math.cos(rad)
+                y2 = cy + tooth_r2 * math.sin(rad)
+
+                painter.drawLine(QPointF(x1, y1), QPointF(x2, y2))
+
+            # внешний круг
+            painter.setPen(QPen(QColor(200, 200, 200), 2))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(QPointF(cx, cy), outer_r, outer_r)
+
+            # внутренний круг
+            painter.setPen(QPen(QColor(180, 180, 180), 2))
+            painter.setBrush(QColor(120, 120, 120))
+            painter.drawEllipse(QPointF(cx, cy), inner_r, inner_r)
+
+
+            # ------------------------------------------------
             #   ПРАВАЯ КНОПКА — крестик
             # ------------------------------------------------
             rb = node.right_button_rect()
@@ -689,6 +746,13 @@ class InfiniteGridWidget(QWidget):
             if node.left_button_rect().contains(wx, wy):
                 node.pressed_left_button = True
                 self.update()
+                return
+
+            # --- шестерёнка ---
+            if node.settings_button_rect().contains(wx, wy):
+                from windows.phrase_properties import PhraseProperties
+                dlg = PhraseProperties(self.constructor.window(), node)
+                dlg.show()
                 return
 
             if node.right_button_rect().contains(wx, wy):
