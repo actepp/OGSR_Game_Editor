@@ -22,6 +22,9 @@ class DialogNode:
         self.x = x
         self.y = y
 
+        self.editing = False
+        self.editor = None
+
         self.locale = "rus"   # локаль по умолчанию
         self.locale_open = False
         self.locale_button_size = 26
@@ -551,6 +554,51 @@ class InfiniteGridWidget(QWidget):
                     self.draw_link(painter, node, target)
 
 
+    def finish_editing(self, node, save=False):
+        if not node.editing:
+            return
+
+        new_text = node.editor.toPlainText().strip()
+
+        node.logic_text_real = new_text
+        node.editor.hide()
+        node.editor.deleteLater()
+        node.editor = None
+        node.editing = False
+
+        if save:
+            # сохраняем в XML
+            mw = self.parent().parent()
+            loader = mw.res_loader
+
+            # получаем XML диалога
+            dialog_data = loader.get_dialog(node.dialog_id.split(":")[0])
+            xml_path = dialog_data["xml_path"]
+
+            import xml.etree.ElementTree as ET
+            tree = ET.parse(xml_path)
+            root = tree.getroot()
+
+            pid = node.logic_id
+
+            # ищем фразу
+            phrase_list = root.find("phrase_list")
+            for phrase in phrase_list.findall("phrase"):
+                if int(phrase.get("id")) == pid:
+                    # обновляем текст
+                    text_tag = phrase.find("text")
+                    if text_tag is not None:
+                        text_tag.text = new_text
+                    break
+
+            tree.write(xml_path, encoding="cp1251")
+
+            # перезагрузить диалог
+            loader.reload_dialog(node.dialog_id.split(":")[0])
+
+        self.update()
+
+
     # --------------------------------------------------------
     #   Панорамирование + перетаскивание + ресайз + кнопки
     # --------------------------------------------------------
@@ -560,7 +608,25 @@ class InfiniteGridWidget(QWidget):
         wx = (pos.x() - self.offset_x) / self.scale
         wy = (pos.y() - self.offset_y) / self.scale
 
+        # если есть активный редактор и клик вне него — закрыть
+        for n in self.nodes:
+            if n.editing and n.editor:
+                if not n.editor.geometry().contains(event.position().toPoint()):
+                    self.finish_editing(n, save=False)
+                    break
+
         for node in reversed(self.nodes):
+            # --- клик по тексту нода ---
+            text_rect = QRectF(
+                node.x,
+                node.y + node.header_height,
+                node.width,
+                node.height - node.header_height
+            )
+
+            if text_rect.contains(wx, wy):
+                self.start_editing(node)
+                return
 
             # --- кнопка локали ---
             if node.locale_button_rect().contains(wx, wy):
@@ -625,6 +691,28 @@ class InfiniteGridWidget(QWidget):
         # иначе — панорамирование
         if event.button() == Qt.MouseButton.LeftButton:
             self._last_mouse_pos = pos
+
+    def start_editing(self, node):
+        if node.editing:
+            return
+
+        node.editing = True
+
+        # создаём QTextEdit
+        from PyQt6.QtWidgets import QTextEdit
+        editor = QTextEdit(self)
+        editor.setPlainText(node.logic_text_real)
+
+        # позиционируем
+        sx = node.x * self.scale + self.offset_x
+        sy = node.y * self.scale + self.offset_y + node.header_height * self.scale
+        sw = node.width * self.scale
+        sh = node.height * self.scale - node.header_height * self.scale
+
+        editor.setGeometry(int(sx), int(sy), int(sw), int(sh))
+        editor.show()
+
+        node.editor = editor
 
     def mouseMoveEvent(self, event):
         pos = event.position().toPoint()
