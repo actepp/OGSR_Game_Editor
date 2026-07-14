@@ -13,7 +13,6 @@ import math
 
 AVAILABLE_LOCALES = ["rus", "eng"]
 
-
 # ============================================================
 #   Узел диалога (квадратик)
 # ============================================================
@@ -127,18 +126,14 @@ class InfiniteGridWidget(QWidget):
 
     def smart_font_size(self, base: int) -> int:
         """
-        Умный размер шрифта:
-        - до scale 1.5 — растёт нормально
-        - после scale 1.5 — рост замедляется
-        - после scale 3 — почти не растёт
+        Текст уменьшается при уменьшении масштаба,
+        а при увеличении растёт только до 1.5× от базового размера.
         """
-        if self.scale <= 1.5:
+        if self.scale < 1.0:
             return int(base * self.scale)
 
-        if self.scale <= 3:
-            return int(base * (1.5 + (self.scale - 1.5) * 0.4))
-
-        return int(base * (1.5 + (3 - 1.5) * 0.4))  # фиксируем максимум
+        # ограничение сверху — максимум 1.5×
+        return int(base * min(self.scale, 1.5))
 
     def spawn_graph(self, graph):
         self.nodes.clear()
@@ -418,7 +413,6 @@ class InfiniteGridWidget(QWidget):
                 int(sh - node.header_height * self.scale)
             )
 
-
             # включаем обрезку по рамке узла
             painter.save()
             painter.setClipRect(text_rect)
@@ -475,8 +469,6 @@ class InfiniteGridWidget(QWidget):
             sb_sy = int(sb.y() * self.scale + self.offset_y)
             sb_sw = int(sb.width() * self.scale)
             sb_sh = int(sb.height() * self.scale)
-
-
 
             # координаты центра
             cx = sb_sx + sb_sw / 2
@@ -551,7 +543,7 @@ class InfiniteGridWidget(QWidget):
 
             painter.setPen(QPen(QColor(255, 255, 255)))
             app_font = self.get_app_font()
-            font = QFont(app_font.family(), self.smart_font_size(app_font.pointSize()))
+            font = QFont(app_font.family(), app_font.pointSize())
             painter.setFont(font)
             painter.drawText(QRect(loc_sx, loc_sy, loc_sw, loc_sh),
                              Qt.AlignmentFlag.AlignCenter,
