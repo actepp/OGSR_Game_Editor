@@ -713,11 +713,20 @@ class InfiniteGridWidget(QWidget):
         # --- закрытие активного редактора ---
         for n in self.nodes:
             if n.editing and n.editor:
+
+                # если клик по галочке — НЕ закрывать редактор
                 if n.left_button_rect().contains(wx, wy):
+                    # галочка должна работать дальше в основном цикле
                     break
-                if not n.editor.geometry().contains(event.position().toPoint()):
-                    self.finish_editing(n, save=False)
+
+                # если клик ВНУТРИ редактора — ничего не делаем
+                if n.editor.geometry().contains(event.position().toPoint()):
                     break
+
+                # иначе — клик вне → закрыть редактор
+                self.finish_editing(n, save=False)
+                break
+
 
         for node in reversed(self.nodes):
 
@@ -938,60 +947,58 @@ class InfiniteGridWidget(QWidget):
         locale = node.locale
         new_text = node.logic_text_real
 
-        # читаем все файлы локали
-        for filename in os.listdir(text_root):
-            if not filename.endswith(".xml"):
-                continue
+        # --- РЕКУРСИВНЫЙ ОБХОД ВСЕХ ПАПОК ---
+        for dirpath, dirnames, filenames in os.walk(text_root):
+            for filename in filenames:
+                if not filename.endswith(".xml"):
+                    continue
 
-            full_path = os.path.join(text_root, filename)
+                full_path = os.path.join(dirpath, filename)
 
-            with open(full_path, "r", encoding="windows-1251") as f:
-                lines = f.readlines()
+                with open(full_path, "r", encoding="windows-1251") as f:
+                    lines = f.readlines()
 
-            inside_string = False
-            modified = False
+                inside_string = False
+                modified = False
 
-            for i, line in enumerate(lines):
-                # нашли начало блока <string id="...">
-                if f'<string id="{key}"' in line:
-                    inside_string = True
+                for i, line in enumerate(lines):
+                    # нашли начало блока <string id="...">
+                    if f'<string id="{key}"' in line:
+                        inside_string = True
 
-                # если мы внутри нужного блока
-                if inside_string:
-                    # вариант 1: <rus>...</rus>
-                    if f"<{locale}>" in line:
-                        # сохраняем исходные пробелы перед тегом
-                        indent = line[:len(line) - len(line.lstrip())]
+                    if inside_string:
+                        # вариант 1: <rus>...</rus>
+                        if f"<{locale}>" in line:
+                            indent = line[:len(line) - len(line.lstrip())]
+                            lines[i] = f"{indent}<{locale}>{new_text}</{locale}>\n"
+                            modified = True
+                            inside_string = False
+                            break
 
-                        lines[i] = f"{indent}<{locale}>{new_text}</{locale}>\n"
-                        modified = True
-                        inside_string = False
-                        break
+                        # вариант 2: атрибуты rus="..."
+                        if f'{locale}="' in line:
+                            import re
+                            lines[i] = re.sub(
+                                rf'{locale}=".*?"',
+                                f'{locale}="{new_text}"',
+                                line
+                            )
+                            modified = True
+                            inside_string = False
+                            break
 
+                        if "</string>" in line:
+                            inside_string = False
 
-                    # вариант 2: атрибуты <string id="x" rus="..." eng="...">
-                    if f'{locale}="' in line:
-                        # заменяем только нужный атрибут
-                        import re
-                        lines[i] = re.sub(
-                            rf'{locale}=".*?"',
-                            f'{locale}="{new_text}"',
-                            line
-                        )
-                        modified = True
-                        inside_string = False
-                        break
+                if modified:
+                    with open(full_path, "w", encoding="windows-1251") as f:
+                        f.writelines(lines)
 
-                    # конец блока
-                    if "</string>" in line:
-                        inside_string = False
+                    print(f"[OK] Locale saved: {key} → {locale} = {new_text}")
+                    return  # ← ВАЖНО: выходим после первого найденного файла
 
-            if modified:
-                with open(full_path, "w", encoding="windows-1251") as f:
-                    f.writelines(lines)
+        print(f"[WARN] Locale key '{key}' not found in ANY text XML")
 
-                print(f"[OK] Locale saved: {key} → {locale} = {new_text}")
-                break
 
     # --------------------------------------------------------
     #   Удаление ветки (родитель + все потомки)
