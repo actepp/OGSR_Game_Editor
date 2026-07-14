@@ -1,13 +1,20 @@
+import xml.etree.ElementTree as ET
+
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QPushButton,
-    QHBoxLayout, QComboBox
+    QHBoxLayout, QGridLayout, QComboBox, QSizePolicy, QFrame
 )
 from PyQt6.QtCore import Qt
 
 
-# ============================================================
-#   Кликабельный квадрат с эффектом нажатия
-# ============================================================
+def make_line():
+    line = QFrame()
+    line.setFrameShape(QFrame.Shape.HLine)
+    line.setFrameShadow(QFrame.Shadow.Sunken)
+    line.setStyleSheet("color: #444;")
+    return line
+
+
 class ClickableSquare(QLabel):
     def __init__(self, text, normal_style, pressed_style):
         super().__init__(text)
@@ -25,18 +32,12 @@ class ClickableSquare(QLabel):
     def mouseReleaseEvent(self, event):
         if not self._is_pressed:
             return
-
         self._is_pressed = False
         self.setStyleSheet(self.normal_style)
-
-        # действие только если отпускание ЛКМ произошло внутри кнопки
         if self.rect().contains(event.position().toPoint()):
             self.clicked()
 
 
-# ============================================================
-#   Окно свойств фразы
-# ============================================================
 class PhraseProperties(QDialog):
     def __init__(self, parent, node):
         super().__init__(parent)
@@ -47,120 +48,112 @@ class PhraseProperties(QDialog):
             "Give info": "give_info",
             "Disable info": "disable_info",
             "Action": "action",
-            "Precondition": "precondition"
+            "Precondition": "precondition",
+            "Has info": "has_info",
+            "Dont has info": "dont_has_info"
         }
 
-        # ширина колонки тегов
         fm = self.fontMetrics()
         self.tag_column_width = max(
             fm.horizontalAdvance(name) for name in self.tag_map.keys()
         ) + 45
 
-        # окно
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.setWindowTitle("Свойства фразы")
         self.resize(500, 300)
 
-        layout = QVBoxLayout()
-        self.setLayout(layout)
+        # ============================================================
+        #   ГЛАВНЫЙ LAYOUT
+        # ============================================================
+        main_layout = QVBoxLayout()
+        self.setLayout(main_layout)
 
-        # --- ШАПКА ---
+        # ============================================================
+        #   ШАПКА — как в DialogProperties
+        # ============================================================
+        header_grid = QGridLayout()
+        header_grid.setColumnStretch(0, 1)
+
         title = QLabel(f"{node.text_key}")
-        title.setStyleSheet("font-size: 16px; font-weight: bold;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title)
+        title.setStyleSheet("font-size: 16px; font-weight: bold; padding: 6px;")
+        title.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
-        # линия
-        line = QLabel()
-        line.setFixedHeight(1)
-        line.setStyleSheet("background-color: rgb(120, 120, 120);")
-        layout.addWidget(line)
+        header_grid.addWidget(title, 0, 0)
+        main_layout.addLayout(header_grid)
 
-        # контейнер строк
-        self.props_layout = QVBoxLayout()
-        layout.addLayout(self.props_layout)
+        # линия под шапкой
+        main_layout.addWidget(make_line())
 
-        # список строк
+        # ============================================================
+        #   ЗОНА СВОЙСТВ — растягивается
+        # ============================================================
+        self.props_container = QVBoxLayout()
+        main_layout.addLayout(self.props_container)
+
         self.rows = []
 
-        # стили квадратов
-        self.minus_normal = """
-        QLabel {
-            color: white;
-            background-color: #b00000;
-            font-size: 18px;
-            font-weight: bold;
-            border: 1px solid #700000;
-            min-width: 24px;
-            min-height: 24px;
-            max-width: 24px;
-            max-height: 24px;
-            qproperty-alignment: AlignCenter;
-        }
-        """
+        # ============================================================
+        #   Загружаем XML строки фразы
+        # ============================================================
+        xml_rows = self.load_phrase_xml()
 
-        self.minus_pressed = """
-        QLabel {
-            color: white;
-            background-color: #8a0000;
-            font-size: 18px;
-            font-weight: bold;
-            border: 1px solid #500000;
-            min-width: 24px;
-            min-height: 24px;
-            max-width: 24px;
-            max-height: 24px;
-            qproperty-alignment: AlignCenter;
-        }
-        """
+        if xml_rows:
+            for tag, value in xml_rows:
+                gui_name = next((k for k, v in self.tag_map.items() if v == tag), "Precondition")
+                self.add_row(gui_name, tag, value)
 
-        self.plus_normal = """
-        QLabel {
-            color: white;
-            background-color: #009900;
-            font-size: 18px;
-            font-weight: bold;
-            border: 1px solid #006600;
-            min-width: 24px;
-            min-height: 24px;
-            max-width: 24px;
-            max-height: 24px;
-            qproperty-alignment: AlignCenter;
-        }
-        """
+        # ============================================================
+        #   ПЛЮСИК
+        # ============================================================
+        plus_row = QHBoxLayout()
+        plus_row.addStretch()
 
-        self.plus_pressed = """
-        QLabel {
-            color: white;
-            background-color: #007700;
-            font-size: 18px;
-            font-weight: bold;
-            border: 1px solid #005500;
-            min-width: 24px;
-            min-height: 24px;
-            max-width: 24px;
-            max-height: 24px;
-            qproperty-alignment: AlignCenter;
-        }
-        """
-
-        # создаём стартовые строки
-        for gui_name, xml_tag in self.tag_map.items():
-            self.add_row(gui_name, xml_tag)
-
-        # плюсик
-        self.plus_row = QHBoxLayout()
-        self.plus_row.addStretch()
-
-        self.btn_plus = ClickableSquare("+", self.plus_normal, self.plus_pressed)
+        self.btn_plus = ClickableSquare("+",
+            """
+            QLabel {
+                color: white;
+                background-color: #009900;
+                font-size: 18px;
+                font-weight: bold;
+                border: 1px solid #006600;
+                min-width: 24px;
+                min-height: 24px;
+                max-width: 24px;
+                max-height: 24px;
+                qproperty-alignment: AlignCenter;
+            }
+            """,
+            """
+            QLabel {
+                color: white;
+                background-color: #007700;
+                font-size: 18px;
+                font-weight: bold;
+                border: 1px solid #005500;
+                min-width: 24px;
+                min-height: 24px;
+                max-width: 24px;
+                max-height: 24px;
+                qproperty-alignment: AlignCenter;
+            }
+            """
+        )
         self.btn_plus.clicked = self.add_empty_row
-        self.plus_row.addWidget(self.btn_plus)
+        plus_row.addWidget(self.btn_plus)
 
-        self.props_layout.addLayout(self.plus_row)
+        self.props_container.addLayout(plus_row)
 
-        # нижняя панель
+        # ============================================================
+        #   Растягивающий элемент — как в DialogProperties
+        # ============================================================
+        main_layout.addStretch()
+
+        # ============================================================
+        #   НИЖНЯЯ ПАНЕЛЬ — прибита к низу
+        # ============================================================
         btn_layout = QHBoxLayout()
-        layout.addLayout(btn_layout)
+        main_layout.addLayout(btn_layout)
 
         btn_save = QPushButton("Сохранить")
         btn_save.setStyleSheet("""
@@ -176,22 +169,62 @@ class PhraseProperties(QDialog):
             }
         """)
         btn_save.clicked.connect(lambda: None)
-        btn_layout.addWidget(btn_save)
-
         btn_layout.addStretch()
+        btn_layout.addWidget(btn_save)
 
         btn_cancel = QPushButton("Отмена")
         btn_cancel.clicked.connect(self.close)
         btn_layout.addWidget(btn_cancel)
 
     # ============================================================
+    #   Загрузка XML фразы
+    # ============================================================
+    def load_phrase_xml(self):
+        mw = self.parent()
+        while mw is not None and not hasattr(mw, "res_loader"):
+            mw = mw.parent()
+
+        if mw is None:
+            return []
+
+        loader = mw.res_loader
+
+        raw_id = str(self.node.dialog_id)
+        dialog_id = raw_id.split(":")[0]
+        phrase_id = str(self.node.logic_id)
+
+        if dialog_id not in loader.dialogs:
+            return []
+
+        dialog_node = loader.dialogs[dialog_id]["xml_node"]
+
+        phrase_list = dialog_node.find("phrase_list")
+        if phrase_list is None:
+            return []
+
+        phrases = phrase_list.findall("phrase")
+
+        phrase_node = next((p for p in phrases if p.get("id") == phrase_id), None)
+        if phrase_node is None:
+            return []
+
+        results = []
+        for child in phrase_node:
+            tag = child.tag
+            if tag not in self.tag_map.values():
+                continue
+            value = (child.text or "").strip()
+            results.append((tag, value))
+
+        return results
+
+    # ============================================================
     #   Создание строки
     # ============================================================
-    def add_row(self, gui_name="Precondition", xml_tag="precondition"):
+    def add_row(self, gui_name="Precondition", xml_tag="precondition", param_value=""):
         row_container = QVBoxLayout()
         row = QHBoxLayout()
 
-        # TAG = ComboBox
         combo = QComboBox()
         combo.setFixedWidth(self.tag_column_width)
         combo.setStyleSheet("""
@@ -212,47 +245,61 @@ class PhraseProperties(QDialog):
 
         row.addWidget(combo)
 
-        # вертикальная линия
-        vline = QLabel()
-        vline.setFixedWidth(1)
-        vline.setStyleSheet("background-color: rgb(80, 80, 80);")
+        vline = QFrame()
+        vline.setFrameShape(QFrame.Shape.VLine)
+        vline.setStyleSheet("color: #444;")
         row.addWidget(vline)
 
-        # PARAMETER
-        edit = QLabel("...")
+        edit = QLabel(param_value if param_value else "...")
         edit.setStyleSheet("color: #ccc; padding-left: 10px;")
         row.addWidget(edit, 1)
 
-        # МИНУС
-        btn_del = ClickableSquare("−", self.minus_normal, self.minus_pressed)
+        btn_del = ClickableSquare("−",
+            """
+            QLabel {
+                color: white;
+                background-color: #b00000;
+                font-size: 18px;
+                font-weight: bold;
+                border: 1px solid #700000;
+                min-width: 24px;
+                min-height: 24px;
+                max-width: 24px;
+                max-height: 24px;
+                qproperty-alignment: AlignCenter;
+            }
+            """,
+            """
+            QLabel {
+                color: white;
+                background-color: #8a0000;
+                font-size: 18px;
+                font-weight: bold;
+                border: 1px solid #500000;
+                min-width: 24px;
+                min-height: 24px;
+                max-width: 24px;
+                max-height: 24px;
+                qproperty-alignment: AlignCenter;
+            }
+            """
+        )
         btn_del.clicked = lambda rc=row_container: self.delete_row(rc)
         row.addWidget(btn_del)
 
         row_container.addLayout(row)
-
-        # линия
-        hline = QLabel()
-        hline.setFixedHeight(1)
-        hline.setStyleSheet("background-color: rgb(120, 120, 120);")
-        row_container.addWidget(hline)
+        row_container.addWidget(make_line())
 
         self.rows.append(row_container)
-        self.props_layout.insertLayout(len(self.rows) - 1, row_container)
+        self.props_container.insertLayout(len(self.rows) - 1, row_container)
 
-    # ============================================================
-    #   Добавление пустой строки
-    # ============================================================
     def add_empty_row(self):
         self.add_row()
 
-    # ============================================================
-    #   Удаление строки
-    # ============================================================
     def delete_row(self, row_container):
         if row_container in self.rows:
             self.rows.remove(row_container)
 
-            # удаляем все виджеты строки
             while row_container.count():
                 item = row_container.takeAt(0)
                 if item.widget():
@@ -260,7 +307,6 @@ class PhraseProperties(QDialog):
                 elif item.layout():
                     self._delete_layout(item.layout())
 
-            # удаляем сам layout
             self._delete_layout(row_container)
 
     def _delete_layout(self, layout):

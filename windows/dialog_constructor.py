@@ -432,7 +432,7 @@ class InfiniteGridWidget(QWidget):
             app_font = self.get_app_font()
             font = QFont(app_font.family(), self.smart_font_size(app_font.pointSize()))
             painter.setFont(font)
-            painter.drawText(header_rect, Qt.AlignmentFlag.AlignCenter, node.text_key)
+            painter.drawText(header_rect, Qt.AlignmentFlag.AlignCenter, str(node.logic_id))
 
             # --- область текста ---
             left_padding = 8 * self.scale
