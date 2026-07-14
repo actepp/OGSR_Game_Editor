@@ -1118,7 +1118,7 @@ class DialogConstructor(QWidget):
         loader = self.parent().res_loader
         dialog_data = loader.get_dialog(dialog_id)
 
-        dlg = DialogProperties(self, dialog_data)
+        dlg = DialogProperties(self.window(), dialog_data)
         dlg.show()
 
     # --------------------------------------------------------

@@ -265,8 +265,7 @@ class DialogProperties(QDialog):
         self.active_editor = None
         self.active_label = None
         self.new_rows = []
-        dc = self.parent()
-        mw = dc.parent()
+        mw = self.parent()          # теперь это MainWindow
         self.loader = mw.res_loader
         self.dialog_id = dialog_id
         self.loader.reload_dialog(dialog_id)
@@ -543,32 +542,42 @@ class DialogProperties(QDialog):
 
 
     def save_dialog(self):
-        dc = self.parent()
-        mw = dc.parent()
+        # --- Получаем loader из MainWindow ---
+        mw = self.parent()              # теперь родитель = MainWindow
         loader = mw.res_loader
+
         dialog_id = self.dialog_data["id"]
+
+        # --- Сохраняем изменения в диалоге ---
         loader.save_dialog(dialog_id, self.dialog_data)
+
+        # --- Читаем XML для вставки новых строк ---
         try:
             with open(self.xml_path, "r", encoding="cp1251", errors="ignore") as f:
                 lines = f.readlines()
         except Exception:
-            loader.reload_dialog(dialog_id)
-            dc.refresh_dialog(dialog_id)
             EDIT_BUFFER.clear()
-            self.close()
+            self.close()        # окно свойств закрываем
             return
+
+        # --- Ищем начало <dialog id="..."> ---
         dialog_start_idx = None
         pattern = re.compile(r'<dialog\b[^>]*\bid="' + re.escape(dialog_id) + r'"')
+
         for i, line in enumerate(lines):
             if pattern.search(line):
                 dialog_start_idx = i
                 break
+
+        # --- Вставляем новые строки, если есть ---
         if dialog_start_idx is not None and self.new_rows:
             if dialog_start_idx + 1 < len(lines):
                 indent_match = re.match(r'^(\s*)', lines[dialog_start_idx + 1])
             else:
                 indent_match = re.match(r'^(\s*)', lines[dialog_start_idx])
+
             indent = indent_match.group(1) if indent_match else "    "
+
             new_lines = []
             for row in self.new_rows:
                 combo = row["combo"]
@@ -577,22 +586,32 @@ class DialogProperties(QDialog):
                 xml_tag = TAG_MAP.get(gui_tag)
                 if xml_tag is None:
                     continue
+
                 param_value = label.text().strip()
                 if not param_value:
                     continue
+
                 new_lines.append(f"{indent}<{xml_tag}>{param_value}</{xml_tag}>\n")
+
             insert_pos = dialog_start_idx + 1
             lines[insert_pos:insert_pos] = new_lines
+
             try:
                 with open(self.xml_path, "w", encoding="cp1251", errors="ignore") as f:
                     f.writelines(lines)
             except Exception:
                 pass
-        loader.reload_dialog(dialog_id)
-        dc.refresh_dialog(dialog_id)
+
+        # --- НИЧЕГО НЕ ПЕРЕЗАГРУЖАЕМ ---
+        # loader.reload_dialog(dialog_id)      # УБРАНО
+        # dc.refresh_dialog(dialog_id)         # УБРАНО
+
         EDIT_BUFFER.clear()
         self.new_rows.clear()
+
+        # --- Закрываем окно свойств, но НЕ редактор нод ---
         self.close()
+
 
     def check_save_enabled(self):
         for row in self.new_rows:
