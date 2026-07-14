@@ -153,7 +153,7 @@ class InfiniteGridWidget(QWidget):
             return int(base * self.scale)
 
         # ограничение сверху — максимум 1.5×
-        return int(base * min(self.scale, 1.5))
+        return int(base * min(self.scale, 1.3))
 
     def spawn_graph(self, graph):
         self.nodes.clear()
