@@ -8,6 +8,8 @@ from windows.dialog_properties import DialogProperties
 from windows.dialog_node_logic import DialogNodeLogic
 from PyQt6.QtGui import QTextLayout, QTextOption
 from PyQt6.QtCore import QPointF
+import os
+import re
 
 AVAILABLE_LOCALES = ["rus", "eng"]
 
@@ -553,11 +555,7 @@ class InfiniteGridWidget(QWidget):
                 if target:
                     self.draw_link(painter, node, target)
 
-
     def finish_editing(self, node, save=False):
-        if not node.editing:
-            return
-
         new_text = node.editor.toPlainText().strip()
 
         node.logic_text_real = new_text
@@ -567,37 +565,51 @@ class InfiniteGridWidget(QWidget):
         node.editing = False
 
         if save:
-            # сохраняем в XML
+            print("try to save")
+            # сохраняем в XML локали
             mw = self.parent().parent()
             loader = mw.res_loader
 
-            # получаем XML диалога
-            dialog_data = loader.get_dialog(node.dialog_id.split(":")[0])
-            xml_path = dialog_data["xml_path"]
+            text_root = loader.paths["configs/text"]
 
-            import xml.etree.ElementTree as ET
-            tree = ET.parse(xml_path)
-            root = tree.getroot()
+            key = node.text_key
+            locale = node.locale
+            new_text = node.logic_text_real
 
-            pid = node.logic_id
+            # ищем файл, где есть нужный <string id="...">
+            for filename in os.listdir(text_root):
+                if not filename.endswith(".xml"):
+                    continue
 
-            # ищем фразу
-            phrase_list = root.find("phrase_list")
-            for phrase in phrase_list.findall("phrase"):
-                if int(phrase.get("id")) == pid:
-                    # обновляем текст
-                    text_tag = phrase.find("text")
-                    if text_tag is not None:
-                        text_tag.text = new_text
-                    break
+                full_path = os.path.join(text_root, filename)
 
-            tree.write(xml_path, encoding="cp1251")
+                try:
+                    tree = ET.parse(full_path)
+                    root = tree.getroot()
 
-            # перезагрузить диалог
-            loader.reload_dialog(node.dialog_id.split(":")[0])
+                    found = False
 
-        self.update()
+                    for s in root.findall("string"):
+                        sid = s.get("id")
+                        if sid == key:
+                            # вариант 1: <string><rus>...</rus></string>
+                            tag = s.find(locale)
+                            if tag is not None:
+                                tag.text = new_text
+                            else:
+                                # вариант 2: <string id="x" rus="..." />
+                                s.set(locale, new_text)
 
+                            found = True
+                            break
+
+                    if found:
+                        tree.write(full_path, encoding="cp1251")
+                        print(f"[OK] Locale saved: {key} → {locale} = {new_text}")
+                        break
+
+                except Exception as e:
+                    print(f"[ERROR] Cannot update locale file {filename}: {e}")
 
     # --------------------------------------------------------
     #   Панорамирование + перетаскивание + ресайз + кнопки
@@ -611,6 +623,14 @@ class InfiniteGridWidget(QWidget):
         # если есть активный редактор и клик вне него — закрыть
         for n in self.nodes:
             if n.editing and n.editor:
+                wx = (event.position().x() - self.offset_x) / self.scale
+                wy = (event.position().y() - self.offset_y) / self.scale
+
+                # если клик по галочке — НЕ закрываем редактор
+                if n.left_button_rect().contains(wx, wy):
+                    break
+
+                # если клик вне редактора — закрываем
                 if not n.editor.geometry().contains(event.position().toPoint()):
                     self.finish_editing(n, save=False)
                     break
@@ -772,6 +792,14 @@ class InfiniteGridWidget(QWidget):
 
                 if node.left_button_rect().contains(wx, wy):
                     print(f"[OK] SAVE clicked for {node.dialog_id}")
+
+                    # если редактор открыт — закрыть и сохранить
+                    if node.editing:
+                        self.finish_editing(node, save=True)
+                    else:
+                        # редактор закрыт — просто сохранить локаль
+                        self.save_node_locale(node)
+
                 self.update()
 
             # --- крестик ---
@@ -792,6 +820,79 @@ class InfiniteGridWidget(QWidget):
 
         if event.button() == Qt.MouseButton.LeftButton:
             self._last_mouse_pos = None
+
+    def save_node_locale(self, node):
+        # ищем MainWindow
+        mw = self.parent()
+        while mw is not None and not hasattr(mw, "res_loader"):
+            mw = mw.parent()
+
+        if mw is None:
+            print("[ERROR] Cannot find MainWindow for saving locale")
+            return
+
+        loader = mw.res_loader
+        text_root = loader.paths["configs/text"]
+
+        key = node.text_key
+        locale = node.locale
+        new_text = node.logic_text_real
+
+        # читаем все файлы локали
+        for filename in os.listdir(text_root):
+            if not filename.endswith(".xml"):
+                continue
+
+            full_path = os.path.join(text_root, filename)
+
+            with open(full_path, "r", encoding="windows-1251") as f:
+                lines = f.readlines()
+
+            inside_string = False
+            modified = False
+
+            for i, line in enumerate(lines):
+                # нашли начало блока <string id="...">
+                if f'<string id="{key}"' in line:
+                    inside_string = True
+
+                # если мы внутри нужного блока
+                if inside_string:
+                    # вариант 1: <rus>...</rus>
+                    if f"<{locale}>" in line:
+                        # сохраняем исходные пробелы перед тегом
+                        indent = line[:len(line) - len(line.lstrip())]
+
+                        lines[i] = f"{indent}<{locale}>{new_text}</{locale}>\n"
+                        modified = True
+                        inside_string = False
+                        break
+
+
+                    # вариант 2: атрибуты <string id="x" rus="..." eng="...">
+                    if f'{locale}="' in line:
+                        # заменяем только нужный атрибут
+                        import re
+                        lines[i] = re.sub(
+                            rf'{locale}=".*?"',
+                            f'{locale}="{new_text}"',
+                            line
+                        )
+                        modified = True
+                        inside_string = False
+                        break
+
+                    # конец блока
+                    if "</string>" in line:
+                        inside_string = False
+
+            if modified:
+                with open(full_path, "w", encoding="windows-1251") as f:
+                    f.writelines(lines)
+
+                print(f"[OK] Locale saved: {key} → {locale} = {new_text}")
+                break
+
     # --------------------------------------------------------
     #   Удаление ветки (родитель + все потомки)
     # --------------------------------------------------------
