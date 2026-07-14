@@ -15,6 +15,12 @@ class ResourceLoader:
         self.dialogs = {}  # {dialog_id: dialog_data}
 
         self._validate_paths()
+        # --- Загрузка локализаций ---
+        text_root = self.paths.get("configs/text")
+        if text_root and os.path.exists(text_root):
+            self.text_loader = TextLoader(text_root)
+        else:
+            self.text_loader = None
 
         if self.ready:
             self._load_dialogs()
@@ -305,3 +311,58 @@ class ResourceLoader:
 
         print(f"[OK] Диалог {dialog_id} перезагружен из XML.")
         return True
+
+class TextLoader:
+    """
+    Загружает ВСЕ xml-файлы из configs/text/ и всех подпапок.
+    Создаёт индекс локализаций, доступный через self.localization.
+    """
+
+    def __init__(self, root_text_path):
+        self.root = root_text_path
+        self.text_xml = []          # список всех xml-файлов
+        self.localization = {}      # ключ → текст
+        self.load_all_xml()
+        self.load_localization()
+
+    # ---------------------------------------------------------
+    # Рекурсивный обход всех подпапок text/
+    # ---------------------------------------------------------
+    def load_all_xml(self):
+        self.text_xml.clear()
+
+        for dirpath, dirnames, filenames in os.walk(self.root):
+            for fname in filenames:
+                if fname.lower().endswith(".xml"):
+                    full_path = os.path.join(dirpath, fname)
+                    self.text_xml.append(full_path)
+
+        print(f"[TextLoader] Найдено XML файлов: {len(self.text_xml)}")
+
+    # ---------------------------------------------------------
+    # Загрузка всех строк локализации
+    # ---------------------------------------------------------
+    def load_localization(self):
+        self.localization.clear()
+
+        for xml_path in self.text_xml:
+            try:
+                tree = ET.parse(xml_path)
+                root = tree.getroot()
+
+                for node in root.findall(".//string"):
+                    key = node.get("id")
+                    text = (node.text or "").strip()
+                    if key:
+                        self.localization[key] = text
+
+            except Exception as e:
+                print(f"[TextLoader] Ошибка чтения {xml_path}: {e}")
+
+        print(f"[TextLoader] Загружено строк: {len(self.localization)}")
+
+    # ---------------------------------------------------------
+    # Получение строки по ключу
+    # ---------------------------------------------------------
+    def get(self, key, default=""):
+        return self.localization.get(key, default)

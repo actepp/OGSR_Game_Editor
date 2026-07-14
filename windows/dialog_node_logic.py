@@ -47,36 +47,38 @@ class DialogNodeLogic:
             print(f"[WARN] Text directory not found: {self.text_root_path}")
             return
 
-        for filename in os.listdir(self.text_root_path):
-            if not filename.endswith(".xml"):
-                continue
+        # РЕКУРСИВНЫЙ ОБХОД ВСЕХ ПАПОК
+        for dirpath, dirnames, filenames in os.walk(self.text_root_path):
+            for filename in filenames:
+                if not filename.lower().endswith(".xml"):
+                    continue
 
-            full_path = os.path.join(self.text_root_path, filename)
+                full_path = os.path.join(dirpath, filename)
 
-            try:
-                tree = ET.parse(full_path)
-                root = tree.getroot()
+                try:
+                    tree = ET.parse(full_path)
+                    root = tree.getroot()
 
-                for s in root.findall("string"):
-                    sid = s.get("id")
-                    if not sid:
-                        continue
+                    for s in root.findall("string"):
+                        sid = s.get("id")
+                        if not sid:
+                            continue
 
-                    entry = {}
+                        entry = {}
 
-                    # вариант 1: <string><rus>...</rus><eng>...</eng></string>
-                    for child in s:
-                        entry[child.tag] = child.text or ""
+                        # вариант 1: <string><rus>...</rus><eng>...</eng></string>
+                        for child in s:
+                            entry[child.tag] = child.text or ""
 
-                    # вариант 2: <string id="x" rus="..." eng="..."/>
-                    for attr in ("rus", "eng"):
-                        if attr in s.attrib:
-                            entry[attr] = s.attrib[attr]
+                        # вариант 2: <string id="x" rus="..." eng="..."/>
+                        for attr in ("rus", "eng"):
+                            if attr in s.attrib:
+                                entry[attr] = s.attrib[attr]
 
-                    self.string_table[sid] = entry
+                        self.string_table[sid] = entry
 
-            except Exception as e:
-                print(f"[ERROR] Cannot parse text file {filename}: {e}")
+                except Exception as e:
+                    print(f"[ERROR] Cannot parse text file {full_path}: {e}")
 
     # ---------------------------------------------------------
     #   Получить реальный текст по ключу
