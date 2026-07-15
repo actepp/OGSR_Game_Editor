@@ -815,6 +815,17 @@ class InfiniteGridWidget(QWidget):
             # ============================================================
             if node.settings_button_rect().contains(wx, wy):
                 print(f"[PRESS] Settings button on {node.dialog_id}:{node.logic_id}")
+
+                # --- ПЕРЕЗАГРУЗКА ДИАЛОГА ---
+                dialog_id = node.dialog_id.split(":")[0]
+
+                mw = self.constructor.window()      # главное окно
+                if hasattr(mw, "res_loader"):
+                    mw.res_loader.reload_dialog(dialog_id)
+                else:
+                    print("[ERROR] res_loader not found in main window")
+
+                # --- ОТКРЫТИЕ ОКНА ---
                 from windows.phrase_properties import PhraseProperties
                 dlg = PhraseProperties(self.constructor.window(), node)
                 dlg.show()

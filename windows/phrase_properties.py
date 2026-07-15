@@ -401,6 +401,28 @@ class PhraseProperties(QDialog):
         EDIT_BUFFER.clear()
         self.close()
 
+    def refresh_phrase(self):
+        # Удаляем старые строки
+        for row in self.rows:
+            while row.count():
+                item = row.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+                elif item.layout():
+                    self._delete_layout(item.layout())
+            self._delete_layout(row)
+
+        self.rows.clear()
+
+        # Перечитываем XML
+        xml_rows = self.load_phrase_xml()
+
+        # Создаём строки заново
+        if xml_rows:
+            for tag, value in xml_rows:
+                gui_name = next((k for k, v in self.tag_map.items() if v == tag), "Precondition")
+                self.add_row(gui_name, tag, value)
+
     def save_phrase_xml(self):
         global EDIT_BUFFER
 
@@ -534,15 +556,15 @@ class PhraseProperties(QDialog):
             end_dialog += 1
 
         # 9) Записываем файл
-        try:
-            with open(xml_path, "w", encoding="utf-8") as f:
-                f.writelines(lines)
-        except Exception as e:
-            print(f"[PhraseProperties] Ошибка записи {xml_path}: {e}")
-            return
+        with open(xml_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
 
         print(f"[PhraseProperties] Сохранено: {xml_path}")
 
-        # 10) Очищаем буфер и закрываем окно
+        # 10) Перезагружаем диалог в ResourceLoader
+        loader.reload_dialog(dialog_id)
+
+        # 11) Очищаем буфер и обновляем GUI
         EDIT_BUFFER.clear()
+        self.refresh_phrase()
         self.close()
