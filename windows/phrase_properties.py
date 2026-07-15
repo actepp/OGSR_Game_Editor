@@ -327,13 +327,27 @@ class PhraseProperties(QDialog):
 
     def delete_row(self, row_container):
         global EDIT_BUFFER
+
         if row_container in self.rows:
             self.rows.remove(row_container)
 
             meta = row_container.edit_meta
+
+            # Если строка была в XML — добавляем запись на удаление
+            if meta["old_tag"] is not None and meta["old_param"] is not None:
+                EDIT_BUFFER.append({
+                    "old_tag": meta["old_tag"],
+                    "old_param": meta["old_param"],
+                    "new_tag": None,
+                    "new_param": None,
+                    "delete": True
+                })
+
+            # Если строка была новой — просто удаляем
             if meta in EDIT_BUFFER:
                 EDIT_BUFFER.remove(meta)
 
+            # Удаляем виджеты
             while row_container.count():
                 item = row_container.takeAt(0)
                 if item.widget():
@@ -342,6 +356,7 @@ class PhraseProperties(QDialog):
                     self._delete_layout(item.layout())
 
             self._delete_layout(row_container)
+
 
     def _delete_layout(self, layout):
         while layout.count():
@@ -389,8 +404,18 @@ class PhraseProperties(QDialog):
     def save_phrase_xml(self):
         global EDIT_BUFFER
 
+        # 1) Закрываем все редакторы и фиксируем new_param
         self._finalize_all_edits()
 
+        # 2) Проверка на пустые параметры
+        for row in self.rows:
+            meta = row.edit_meta
+            if not meta.get("delete"):  # удалённые строки можно игнорировать
+                if meta["new_param"].strip() == "":
+                    print("[PhraseProperties] Параметр пуст — сохранение запрещено")
+                    return
+
+        # 3) Получаем loader
         mw = self.parent()
         while mw is not None and not hasattr(mw, "res_loader"):
             mw = mw.parent()
@@ -401,6 +426,7 @@ class PhraseProperties(QDialog):
 
         loader = mw.res_loader
 
+        # 4) Идентификаторы
         raw_id = str(self.node.dialog_id)
         dialog_id = raw_id.split(":")[0]
         phrase_id = str(self.node.logic_id)
@@ -411,6 +437,7 @@ class PhraseProperties(QDialog):
 
         xml_path = loader.dialogs[dialog_id]["xml_path"]
 
+        # 5) Читаем файл построчно
         try:
             with open(xml_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
@@ -418,7 +445,7 @@ class PhraseProperties(QDialog):
             print(f"[PhraseProperties] Ошибка чтения {xml_path}: {e}")
             return
 
-        # границы диалога
+        # 6) Находим границы <dialog>
         start_dialog = None
         end_dialog = None
 
@@ -438,7 +465,7 @@ class PhraseProperties(QDialog):
             print(f"[PhraseProperties] Не найдены границы dialog {dialog_id}")
             return
 
-        # границы фразы
+        # 7) Находим границы <phrase>
         start_phrase = None
         end_phrase = None
 
@@ -455,36 +482,58 @@ class PhraseProperties(QDialog):
                     break
 
         if start_phrase is None or end_phrase is None:
-            print(f"[PhraseProperties] Не найдены границы phrase {phrase_id} в dialog {dialog_id}")
+            print(f"[PhraseProperties] Не найдены границы phrase {phrase_id}")
             return
 
-        # применяем EDIT_BUFFER
+        # 8) Применяем EDIT_BUFFER
         for meta in EDIT_BUFFER:
             old_tag = meta["old_tag"]
-            new_tag = meta["new_tag"]
             old_param = meta["old_param"]
+            new_tag = meta["new_tag"]
             new_param = meta["new_param"]
 
-            new_line = f"<{new_tag}>{new_param}</{new_tag}>"
+            # === УДАЛЕНИЕ СТРОКИ ===
+            if meta.get("delete"):
+                old_line = f"<{old_tag}>{old_param}</{old_tag}>"
+                found = False
 
+                for i in range(start_phrase, end_phrase + 1):
+                    if old_line in lines[i]:
+                        lines.pop(i)
+                        found = True
+                        end_phrase -= 1
+                        end_dialog -= 1
+                        break
+
+                if not found:
+                    print(f"[PhraseProperties] Не удалось удалить строку '{old_line}'")
+                continue
+
+            # === РЕДАКТИРОВАНИЕ СТРОКИ ===
             if old_tag is not None and old_param is not None:
                 old_line = f"<{old_tag}>{old_param}</{old_tag}>"
+                new_line = f"<{new_tag}>{new_param}</{new_tag}>"
+
                 found = False
                 for i in range(start_phrase, end_phrase + 1):
                     if old_line in lines[i]:
                         lines[i] = lines[i].replace(old_line, new_line)
                         found = True
                         break
-                if not found:
-                    print(f"[PhraseProperties] Строка '{old_line}' не найдена в phrase {phrase_id}")
-            else:
-                # новая строка: вставляем перед </phrase>
-                insert_index = end_phrase
-                indent = "        "  # 8 пробелов как обычно внутри phrase
-                lines.insert(insert_index, indent + new_line + "\n")
-                end_phrase += 1
-                end_dialog += 1
 
+                if not found:
+                    print(f"[PhraseProperties] Строка '{old_line}' не найдена для замены")
+                continue
+
+            # === НОВАЯ СТРОКА ===
+            new_line = f"<{new_tag}>{new_param}</{new_tag}>"
+            indent = "        "  # 8 пробелов, как обычно внутри <phrase>
+            insert_index = end_phrase
+            lines.insert(insert_index, indent + new_line + "\n")
+            end_phrase += 1
+            end_dialog += 1
+
+        # 9) Записываем файл
         try:
             with open(xml_path, "w", encoding="utf-8") as f:
                 f.writelines(lines)
@@ -493,5 +542,7 @@ class PhraseProperties(QDialog):
             return
 
         print(f"[PhraseProperties] Сохранено: {xml_path}")
+
+        # 10) Очищаем буфер и закрываем окно
         EDIT_BUFFER.clear()
         self.close()
