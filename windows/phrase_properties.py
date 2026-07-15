@@ -2,9 +2,9 @@ import xml.etree.ElementTree as ET
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QPushButton,
-    QHBoxLayout, QGridLayout, QComboBox, QSizePolicy, QFrame
+    QHBoxLayout, QGridLayout, QComboBox, QSizePolicy, QFrame, QLineEdit, QWidget
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QEvent
 
 
 def make_line():
@@ -43,7 +43,6 @@ class PhraseProperties(QDialog):
         super().__init__(parent)
         self.node = node
 
-        # GUI → XML
         self.tag_map = {
             "Give info": "give_info",
             "Disable info": "disable_info",
@@ -62,15 +61,9 @@ class PhraseProperties(QDialog):
         self.setWindowTitle("Свойства фразы")
         self.resize(500, 300)
 
-        # ============================================================
-        #   ГЛАВНЫЙ LAYOUT
-        # ============================================================
         main_layout = QVBoxLayout()
         self.setLayout(main_layout)
 
-        # ============================================================
-        #   ШАПКА — как в DialogProperties
-        # ============================================================
         header_grid = QGridLayout()
         header_grid.setColumnStretch(0, 1)
 
@@ -82,20 +75,13 @@ class PhraseProperties(QDialog):
         header_grid.addWidget(title, 0, 0)
         main_layout.addLayout(header_grid)
 
-        # линия под шапкой
         main_layout.addWidget(make_line())
 
-        # ============================================================
-        #   ЗОНА СВОЙСТВ — растягивается
-        # ============================================================
         self.props_container = QVBoxLayout()
         main_layout.addLayout(self.props_container)
 
         self.rows = []
 
-        # ============================================================
-        #   Загружаем XML строки фразы
-        # ============================================================
         xml_rows = self.load_phrase_xml()
 
         if xml_rows:
@@ -103,9 +89,6 @@ class PhraseProperties(QDialog):
                 gui_name = next((k for k, v in self.tag_map.items() if v == tag), "Precondition")
                 self.add_row(gui_name, tag, value)
 
-        # ============================================================
-        #   ПЛЮСИК
-        # ============================================================
         plus_row = QHBoxLayout()
         plus_row.addStretch()
 
@@ -144,14 +127,8 @@ class PhraseProperties(QDialog):
 
         self.props_container.addLayout(plus_row)
 
-        # ============================================================
-        #   Растягивающий элемент — как в DialogProperties
-        # ============================================================
         main_layout.addStretch()
 
-        # ============================================================
-        #   НИЖНЯЯ ПАНЕЛЬ — прибита к низу
-        # ============================================================
         btn_layout = QHBoxLayout()
         main_layout.addLayout(btn_layout)
 
@@ -176,9 +153,9 @@ class PhraseProperties(QDialog):
         btn_cancel.clicked.connect(self.close)
         btn_layout.addWidget(btn_cancel)
 
-    # ============================================================
-    #   Загрузка XML фразы
-    # ============================================================
+        # === ГЛОБАЛЬНЫЙ eventFilter для выхода из редактора ===
+        self.installEventFilter(self)
+
     def load_phrase_xml(self):
         mw = self.parent()
         while mw is not None and not hasattr(mw, "res_loader"):
@@ -218,9 +195,6 @@ class PhraseProperties(QDialog):
 
         return results
 
-    # ============================================================
-    #   Создание строки
-    # ============================================================
     def add_row(self, gui_name="Precondition", xml_tag="precondition", param_value=""):
         row_container = QVBoxLayout()
         row = QHBoxLayout()
@@ -250,9 +224,26 @@ class PhraseProperties(QDialog):
         vline.setStyleSheet("color: #444;")
         row.addWidget(vline)
 
-        edit = QLabel(param_value if param_value else "...")
-        edit.setStyleSheet("color: #ccc; padding-left: 10px;")
-        row.addWidget(edit, 1)
+        # === LABEL + EDITOR ===
+        edit_label = QLabel(param_value if param_value else "...")
+        edit_label.setStyleSheet("color: #ccc; padding-left: 10px;")
+
+        edit_edit = QLineEdit(param_value)
+        edit_edit.setStyleSheet("color: white; background-color: #202020; padding-left: 10px;")
+        edit_edit.hide()
+
+        # === Клик по QLabel → включить редактор ===
+        def label_mousePressEvent(event, label=edit_label, edit=edit_edit):
+            if event.button() == Qt.MouseButton.LeftButton:
+                label.hide()
+                edit.show()
+                edit.setFocus()
+                edit.selectAll()
+
+        edit_label.mousePressEvent = label_mousePressEvent
+
+        row.addWidget(edit_label, 1)
+        row.addWidget(edit_edit, 1)
 
         btn_del = ClickableSquare("−",
             """
@@ -290,6 +281,10 @@ class PhraseProperties(QDialog):
         row_container.addLayout(row)
         row_container.addWidget(make_line())
 
+        # сохраняем ссылку на элементы
+        row_container.edit_label = edit_label
+        row_container.edit_edit = edit_edit
+
         self.rows.append(row_container)
         self.props_container.insertLayout(len(self.rows) - 1, row_container)
 
@@ -316,3 +311,22 @@ class PhraseProperties(QDialog):
                 item.widget().deleteLater()
             elif item.layout():
                 self._delete_layout(item.layout())
+
+    # === ГЛОБАЛЬНЫЙ eventFilter ===
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.MouseButtonPress:
+            pos = event.position().toPoint()
+
+            for row in self.rows:
+                edit = row.edit_edit
+                label = row.edit_label
+
+                if edit.isVisible():
+                    # если кликнули вне редактора
+                    if not edit.geometry().contains(pos):
+                        text = edit.text().strip()
+                        label.setText(text if text else "...")
+                        edit.hide()
+                        label.show()
+
+        return super().eventFilter(obj, event)
