@@ -110,10 +110,15 @@ class InfiniteGridWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         self.offset_x = 0.0
         self.offset_y = 0.0
         self.scale = 1.0
+
+        self.undo_stack = []
+        self.redo_stack = []
+        self._movement_recording = {}   # временное хранилище начальных координат
 
         self._last_mouse_pos: QPoint | None = None
         self.base_grid_step = 50.0
@@ -258,7 +263,6 @@ class InfiniteGridWidget(QWidget):
             self.nodes.append(node)
 
         self.update()
-
 
     def find_node_by_phrase_id(self, pid):
         for n in self.nodes:
@@ -915,16 +919,21 @@ class InfiniteGridWidget(QWidget):
             if node.header_rect().contains(wx, wy):
                 print(f"[PRESS] Drag start on {node.dialog_id}:{node.logic_id}")
 
+                # поднять ноду наверх
                 if event.button() == Qt.MouseButton.LeftButton:
                     self.nodes.remove(node)
                     self.nodes.append(node)
                     self.update()
+
+                # фиксируем начальные координаты
+                self._movement_recording[node.logic_id] = (node.x, node.y)
 
                 self.active_node = node
                 node.dragging = True
                 node.drag_offset_x = wx - node.x
                 node.drag_offset_y = wy - node.y
                 return
+
 
             # ================= ЛКМ по телу ноды (не по кнопкам/тексту) =================
             if event.button() == Qt.MouseButton.LeftButton and node.rect().contains(wx, wy):
@@ -1033,6 +1042,20 @@ class InfiniteGridWidget(QWidget):
                 print(f"[RELEASE] Drag end on {node.dialog_id}:{node.logic_id}")
                 node.dragging = False
 
+                old_x, old_y = self._movement_recording.get(node.logic_id, (node.x, node.y))
+                new_x, new_y = node.x, node.y
+
+                if (old_x, old_y) != (new_x, new_y):
+                    self.undo_stack.append({
+                        "type": "move",
+                        "node_id": node.logic_id,
+                        "old": (old_x, old_y),
+                        "new": (new_x, new_y)
+                    })
+
+                self._movement_recording.pop(node.logic_id, None)
+
+
             # ресайз завершён
             if node.resizing:
                 print(f"[RELEASE] Resize end on {node.dialog_id}:{node.logic_id}")
@@ -1073,6 +1096,34 @@ class InfiniteGridWidget(QWidget):
 
         # --- если ничего не произошло ---
         print("[RELEASE] Nothing special")
+
+    def undo(self):
+        if not self.undo_stack:
+            print("[UNDO] Stack empty")
+            return
+
+        cmd = self.undo_stack.pop()
+        self.redo_stack.append(cmd)
+
+        if cmd["type"] == "move":
+            node = self.find_node_by_phrase_id(cmd["node_id"])
+            if node:
+                node.x, node.y = cmd["old"]
+                self.update()
+
+    def redo(self):
+        if not self.redo_stack:
+            print("[REDO] Stack empty")
+            return
+
+        cmd = self.redo_stack.pop()
+        self.undo_stack.append(cmd)
+
+        if cmd["type"] == "move":
+            node = self.find_node_by_phrase_id(cmd["node_id"])
+            if node:
+                node.x, node.y = cmd["new"]
+                self.update()
 
     def save_node_locale(self, node):
         # ищем MainWindow
@@ -1432,6 +1483,20 @@ class InfiniteGridWidget(QWidget):
         self.offset_y = cy - world_y_before * self.scale
 
         self.update()
+    def keyPressEvent(self, event):
+        # Ctrl+Z → Undo
+        if event.key() == Qt.Key.Key_Z and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            print("[KEY] Ctrl+Z → undo")
+            self.undo()
+            return
+
+        # Ctrl+Y → Redo
+        if event.key() == Qt.Key.Key_Y and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            print("[KEY] Ctrl+Y → redo")
+            self.redo()
+            return
+
+        super().keyPressEvent(event)
 
 
 # ============================================================
