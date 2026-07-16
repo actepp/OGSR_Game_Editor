@@ -10,6 +10,7 @@ from PyQt6.QtGui import QTextLayout, QTextOption
 from PyQt6.QtCore import QPointF, QEvent
 import os
 import math
+import re
 
 AVAILABLE_LOCALES = ["rus", "eng"]
 
@@ -734,7 +735,42 @@ class InfiniteGridWidget(QWidget):
                 break
 
         for node in reversed(self.nodes):
+                        # ============================================================
+            #   8) КОНТЕКСТНОЕ МЕНЮ (ПКМ)
+            # ============================================================
+            if event.button() == Qt.MouseButton.RightButton:
 
+                # запрещаем меню если редактор открыт
+                if node.editing:
+                    return
+
+                # запрещаем меню если клик по кнопкам
+                if node.left_button_rect().contains(wx, wy):
+                    return
+                if node.right_button_rect().contains(wx, wy):
+                    return
+                if node.settings_button_rect().contains(wx, wy):
+                    return
+                if node.locale_button_rect().contains(wx, wy):
+                    return
+
+                # показываем меню только если клик по телу ноды
+                if node.rect().contains(wx, wy):
+
+                    menu = QMenu(self)
+
+                    act_add_after = menu.addAction("Добавить отсюда")
+                    act_delete = menu.addAction("Удалить фразу")
+
+                    action = menu.exec(self.mapToGlobal(pos))
+
+                    if action == act_delete:
+                        self.delete_phrase(node)
+                        return
+
+                    if action == act_add_after:
+                        self.add_phrase_after(node)
+                        return
             # ============================================================
             #   1) КНОПКА ЛОКАЛИ
             # ============================================================
@@ -1049,6 +1085,233 @@ class InfiniteGridWidget(QWidget):
 
         self.update()
 
+    def delete_phrase(self, node: DialogNode):
+        import re
+
+        dialog_id = node.dialog_id.split(":")[0]
+        phrase_id = str(node.logic_id)
+
+        mw = self.find_main_window()
+        if mw is None or not hasattr(mw, "res_loader"):
+            print("[delete_phrase] MainWindow or res_loader not found")
+            return
+
+        loader = mw.res_loader
+        xml_path = loader.dialogs[dialog_id]["xml_path"]
+
+        # читаем файл
+        try:
+            with open(xml_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+        except Exception as e:
+            print("[delete_phrase] Cannot read XML:", e)
+            return
+
+        # --------------------------------------------------------
+        #   1) Найти границы <dialog id="..."> ... </dialog>
+        # --------------------------------------------------------
+        dialog_start = None
+        dialog_end = None
+
+        pattern_dialog = rf'<dialog\s+[^>]*id="{dialog_id}"'
+        for i, line in enumerate(lines):
+            if re.search(pattern_dialog, line):
+                dialog_start = i
+                break
+
+        if dialog_start is None:
+            print("[delete_phrase] dialog start not found")
+            return
+
+        for i in range(dialog_start + 1, len(lines)):
+            if "</dialog>" in lines[i]:
+                dialog_end = i
+                break
+
+        if dialog_end is None:
+            print("[delete_phrase] dialog end not found")
+            return
+
+        # --------------------------------------------------------
+        #   2) Найти <phrase id="X"> ... </phrase> внутри диалога
+        # --------------------------------------------------------
+        start = None
+        end = None
+
+        pattern_phrase = rf'<phrase\s+[^>]*id="{phrase_id}"'
+        for i in range(dialog_start, dialog_end + 1):
+            if re.search(pattern_phrase, lines[i]):
+                start = i
+                break
+
+        if start is None:
+            print("[delete_phrase] phrase not found")
+            return
+
+        for i in range(start + 1, dialog_end + 1):
+            if "</phrase>" in lines[i]:
+                end = i
+                break
+
+        if end is None:
+            print("[delete_phrase] phrase end not found")
+            return
+
+        # --------------------------------------------------------
+        #   3) Удалить саму фразу
+        # --------------------------------------------------------
+        new_dialog_block = []
+        for i in range(dialog_start, dialog_end + 1):
+            if not (start <= i <= end):
+                new_dialog_block.append(lines[i])
+
+        # --------------------------------------------------------
+        #   4) Удалить только внутри диалога все <next>X</next>
+        # --------------------------------------------------------
+        old_next = f"<next>{phrase_id}</next>"
+
+        cleaned_dialog_block = []
+        for line in new_dialog_block:
+            if old_next not in line:
+                cleaned_dialog_block.append(line)
+
+        # --------------------------------------------------------
+        #   5) Собрать новый файл
+        # --------------------------------------------------------
+        new_lines = (
+            lines[:dialog_start] +
+            cleaned_dialog_block +
+            lines[dialog_end + 1:]
+        )
+
+        # --------------------------------------------------------
+        #   6) Записать файл
+        # --------------------------------------------------------
+        try:
+            with open(xml_path, "w", encoding="utf-8") as f:
+                f.writelines(new_lines)
+        except Exception as e:
+            print("[delete_phrase] Cannot write XML:", e)
+            return
+
+        print(f"[delete_phrase] Phrase {phrase_id} deleted from dialog {dialog_id}")
+
+        # --------------------------------------------------------
+        #   7) Перезагрузить диалог
+        # --------------------------------------------------------
+        loader.reload_dialog(dialog_id)
+
+        # --------------------------------------------------------
+        #   8) Перерисовать граф
+        # --------------------------------------------------------
+        dialog_data = loader.get_dialog(dialog_id)
+        xml_root = dialog_data["xml_node"]
+
+        logic = DialogNodeLogic(loader.paths["configs/text"])
+        graph = logic.build_graph(xml_root)
+
+        self.spawn_graph(graph)
+
+
+    def add_phrase_after(self, node: DialogNode):
+        dialog_id = node.dialog_id.split(":")[0]
+        phrase_id = str(node.logic_id)
+
+        mw = self.find_main_window()
+        loader = mw.res_loader
+
+        xml_path = loader.dialogs[dialog_id]["xml_path"]
+
+        # читаем файл
+        with open(xml_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        # ищем максимальный id
+        import re
+        max_id = 0
+        for line in lines:
+            m = re.search(r'<phrase\s+[^>]*id="(\d+)"', line)
+            if m:
+                max_id = max(max_id, int(m.group(1)))
+
+        new_id = max_id + 1
+
+        # ищем текущую фразу
+        start = None
+        end = None
+
+        pattern = rf'<phrase\s+[^>]*id="{phrase_id}"'
+        for i, line in enumerate(lines):
+            if re.search(pattern, line):
+                start = i
+                break
+
+        if start is None:
+            print("[add_phrase_after] phrase not found")
+            return
+
+        for i in range(start + 1, len(lines)):
+            if "</phrase>" in lines[i]:
+                end = i
+                break
+
+        if end is None:
+            print("[add_phrase_after] phrase end not found")
+            return
+
+        # вставляем новую фразу перед </phrase_list>
+        insert_index = None
+        for i, line in enumerate(lines):
+            if "<phrase_list" in line:
+                # ищем конец phrase_list
+                for j in range(i+1, len(lines)):
+                    if "</phrase_list>" in lines[j]:
+                        insert_index = j
+                        break
+                break
+
+        if insert_index is None:
+            print("[add_phrase_after] phrase_list not found")
+            return
+
+        new_phrase = [
+            f'        <phrase id="{new_id}">\n',
+            f'            <text>new_phrase</text>\n',
+            f'        </phrase>\n'
+        ]
+
+        lines[insert_index:insert_index] = new_phrase
+
+        # обновляем next у текущей фразы
+        new_next = f"<next>{new_id}</next>"
+        old_next = None
+
+        # ищем старый next
+        for i in range(start, end+1):
+            if "<next>" in lines[i]:
+                old_next = lines[i].strip()
+                lines[i] = f"            {new_next}\n"
+                break
+
+        # если next не было — добавляем
+        if old_next is None:
+            lines.insert(end, f"            {new_next}\n")
+
+        # сохраняем
+        with open(xml_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+
+        # перезагрузка диалога
+        loader.reload_dialog(dialog_id)
+
+        # перерисовка
+        dialog_data = loader.get_dialog(dialog_id)
+        xml_root = dialog_data["xml_node"]
+
+        logic = DialogNodeLogic(loader.paths["configs/text"])
+        graph = logic.build_graph(xml_root)
+
+        self.spawn_graph(graph)
 
     # --------------------------------------------------------
     #   Сбор всех потомков по связям next
@@ -1240,7 +1503,7 @@ class DialogConstructor(QWidget):
     # --------------------------------------------------------
     def open_dialog(self, dialog_id: str):
         loader = self.parent().res_loader
-
+        self.refresh_dialog(dialog_id)
         # получаем данные диалога
         dialog_data = loader.get_dialog(dialog_id)
         dialog_xml = dialog_data["xml_node"]
