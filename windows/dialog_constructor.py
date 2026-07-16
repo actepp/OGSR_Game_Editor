@@ -1041,26 +1041,43 @@ class InfiniteGridWidget(QWidget):
 
     def mouseReleaseEvent(self, event):
 
-        pos = event.position().toPoint()
-        wx = (pos.x() - self.offset_x) / self.scale
-        wy = (pos.y() - self.offset_y) / self.scale
+        wx = (event.position().x() - self.offset_x) / self.scale
+        wy = (event.position().y() - self.offset_y) / self.scale
 
         print(f"\n=== [RELEASE] ({wx:.1f}, {wy:.1f}) ===")
 
-        # --- если был панораминг ---
-        if self._last_mouse_pos is not None:
-            self._last_mouse_pos = None
-            # сбрасываем все кнопки
-            for n in self.nodes:
-                n.pressed_left_button = False
-                n.pressed_right_button = False
-            return
+        # --- галочка ---
+        for node in self.nodes:
+            if node.pressed_left_button:
+                node.pressed_left_button = False
 
-        # --- если была активная нода (перетаскивание или ресайз) ---
+                if node.left_button_rect().contains(wx, wy):
+                    print(f"[RELEASE] CHECKBOX released for {node.dialog_id}:{node.logic_id}")
+
+                    if node.editing:
+                        self.finish_editing(node, save=True)
+                    else:
+                        self.save_node_locale(node)
+
+                    node.modified = False
+                    self.update()
+                return
+
+        # --- крестик ---
+        for node in self.nodes:
+            if node.pressed_right_button:
+                node.pressed_right_button = False
+
+                if node.right_button_rect().contains(wx, wy):
+                    print(f"[RELEASE] CLOSE released for {node.dialog_id}:{node.logic_id}")
+                    self.delete_phrase(node)
+                    self.update()
+                return
+
+        # --- завершение перетаскивания ---
         if self.active_node:
             node = self.active_node
 
-            # перетаскивание завершено
             if node.dragging:
                 print(f"[RELEASE] Drag end on {node.dialog_id}:{node.logic_id}")
                 node.dragging = False
@@ -1078,47 +1095,16 @@ class InfiniteGridWidget(QWidget):
 
                 self._movement_recording.pop(node.logic_id, None)
 
-
-            # ресайз завершён
             if node.resizing:
                 print(f"[RELEASE] Resize end on {node.dialog_id}:{node.logic_id}")
                 node.resizing = False
-
-            # сбрасываем кнопки — перетаскивание отменяет нажатие
-            node.pressed_left_button = False
-            node.pressed_right_button = False
 
             self.active_node = None
             self.update()
             return
 
-        # --- обработка кнопок (ТОЛЬКО если клик НАЧАЛСЯ на кнопке) ---
-        for node in reversed(self.nodes):
-
-            # ================= галочка =================
-            if node.pressed_left_button:
-                node.pressed_left_button = False
-
-                # курсор должен быть над кнопкой при отпускании
-                if node.left_button_rect().contains(wx, wy):
-                    print(f"[RELEASE] CHECKBOX toggled for {node.dialog_id}:{node.logic_id}")
-                    node.checked = not node.checked
-                    self.update()
-                return
-
-            # ================= крестик =================
-            if node.pressed_right_button:
-                node.pressed_right_button = False
-
-                if node.right_button_rect().contains(wx, wy):
-                    print(f"[RELEASE] CLOSE confirmed for {node.dialog_id}:{node.logic_id}")
-                    self.delete_phrase(node)
-                    return
-
-                return
-
-        # --- если ничего не произошло ---
-        print("[RELEASE] Nothing special")
+        # --- завершение панорамирования ---
+        self._last_mouse_pos = None
 
     def undo(self):
         if not self.undo_stack:

@@ -54,7 +54,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 11,
+          "SelectedChildIndex": 12,
           "Children": [
             {
               "$type": "Bookmark",
@@ -71,6 +71,10 @@
             {
               "$type": "Bookmark",
               "Name": "ST:128:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:1:0:{d212f56b-c48a-434c-a121-1c5d80b59b9f}"
             },
             {
               "$type": "Document",
@@ -94,8 +98,7 @@
               "RelativeToolTip": "res_loader.py",
               "ViewState": "AgIAAFgAAAAAAAAAAAAWwGYAAABLAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-06-29T17:30:13.675Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-29T17:30:13.675Z"
             },
             {
               "$type": "Document",
@@ -131,8 +134,7 @@
               "RelativeToolTip": "UI.py",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-06-29T04:42:10.698Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-29T04:42:10.698Z"
             },
             {
               "$type": "Document",
@@ -166,7 +168,7 @@
               "RelativeDocumentMoniker": "windows\\dialog_constructor.py",
               "ToolTip": "E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_constructor.py",
               "RelativeToolTip": "windows\\dialog_constructor.py",
-              "ViewState": "AgIAAK8AAAAAAAAAAAAWwMwAAAASAAAAAAAAAA==",
+              "ViewState": "AgIAABEEAAAAAAAAAAAAABEEAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
               "WhenOpened": "2026-06-29T16:04:48.095Z",
               "EditorCaption": ""
@@ -193,8 +195,7 @@
               "RelativeToolTip": "windows\\phrase_properties.py",
               "ViewState": "AgIAAHIAAAAAAAAAAAAWwH8AAAAPAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-07-15T10:08:28.481Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-07-15T10:08:28.481Z"
             },
             {
               "$type": "Document",
