@@ -1304,17 +1304,18 @@ class InfiniteGridWidget(QWidget):
 
         # обновляем next у текущей фразы
         new_next = f"<next>{new_id}</next>"
-        old_next = None
 
-        # ищем старый next
-        for i in range(start, end+1):
+        # ищем последнюю строку <next> внутри фразы
+        insert_pos = None
+        for i in range(start, end + 1):
             if "<next>" in lines[i]:
-                old_next = lines[i].strip()
-                lines[i] = f"            {new_next}\n"
-                break
+                insert_pos = i + 1
 
-        # если next не было — добавляем
-        if old_next is None:
+        if insert_pos is not None:
+            # вставляем новый next после последнего существующего
+            lines.insert(insert_pos, f"            {new_next}\n")
+        else:
+            # если next не было — добавляем перед </phrase>
             lines.insert(end, f"            {new_next}\n")
 
         # сохраняем

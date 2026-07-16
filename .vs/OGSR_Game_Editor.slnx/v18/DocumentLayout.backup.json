@@ -54,15 +54,11 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 12,
+          "SelectedChildIndex": 11,
           "Children": [
             {
               "$type": "Bookmark",
               "Name": "ST:0:0:{34e76e81-ee4a-11d0-ae2e-00a0c90fffc3}"
-            },
-            {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{cce594b6-0c39-4442-ba28-10c64ac7e89f}"
             },
             {
               "$type": "Bookmark",
@@ -98,8 +94,7 @@
               "RelativeToolTip": "res_loader.py",
               "ViewState": "AgIAAFgAAAAAAAAAAAAWwF4AAAAzAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-06-29T17:30:13.675Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-29T17:30:13.675Z"
             },
             {
               "$type": "Document",
@@ -169,7 +164,7 @@
               "RelativeDocumentMoniker": "windows\\dialog_constructor.py",
               "ToolTip": "E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_constructor.py",
               "RelativeToolTip": "windows\\dialog_constructor.py",
-              "ViewState": "AgIAAPcCAAAAAAAAAAAWwAwDAAAqAAAAAAAAAA==",
+              "ViewState": "AgIAANMEAAAAAAAAAAAAANMEAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
               "WhenOpened": "2026-06-29T16:04:48.095Z",
               "EditorCaption": ""
