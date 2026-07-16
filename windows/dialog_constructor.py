@@ -10,7 +10,7 @@ from PyQt6.QtGui import QTextLayout, QTextOption
 from PyQt6.QtCore import QPointF, QEvent
 import os
 import math
-import re
+from windows.phrase_properties import PhraseProperties
 
 AVAILABLE_LOCALES = ["rus", "eng"]
 
@@ -192,6 +192,17 @@ class InfiniteGridWidget(QWidget):
 
         # ограничение сверху — максимум 1.5×
         return int(base * min(self.scale, 1.3))
+
+    def open_phrase_properties(self, node):
+        mw = self.window()
+
+        # Перезагружаем только нужный диалог
+        if hasattr(mw, "res_loader"):
+            dialog_id = str(node.dialog_id).split(":")[0]
+            mw.res_loader.reload_dialog(dialog_id)
+
+        dlg = PhraseProperties(self.window(), node)
+        dlg.exec()
 
     def spawn_graph(self, graph):
         self.nodes.clear()
@@ -532,6 +543,7 @@ class InfiniteGridWidget(QWidget):
             # ------------------------------------------------
             #   КНОПКА ШЕСТЕРЁНКИ
             # ------------------------------------------------
+            """
             sb = node.settings_button_rect()
             sb_sx = int(sb.x() * self.scale + self.offset_x)
             sb_sy = int(sb.y() * self.scale + self.offset_y)
@@ -573,7 +585,7 @@ class InfiniteGridWidget(QWidget):
             painter.setPen(QPen(QColor(180, 180, 180), 2))
             painter.setBrush(QColor(120, 120, 120))
             painter.drawEllipse(QPointF(cx, cy), inner_r, inner_r)
-
+            """
 
             # ------------------------------------------------
             #   ПРАВАЯ КНОПКА — крестик
@@ -784,35 +796,45 @@ class InfiniteGridWidget(QWidget):
                 if node.editing:
                     return
 
-                # если клик по кнопкам — не показываем меню и НЕ идём дальше
+                # если клик по кнопкам — не показываем меню
                 if node.left_button_rect().contains(wx, wy):
                     return
                 if node.right_button_rect().contains(wx, wy):
                     return
-                if node.settings_button_rect().contains(wx, wy):
-                    return
                 if node.locale_button_rect().contains(wx, wy):
                     return
 
+                # если клик по телу ноды
                 if node.rect().contains(wx, wy) and not self.is_point_covered_by_front_node(node, wx, wy):
+
                     menu = QMenu(self)
                     menu.setFixedWidth(150)
 
                     act_add_after = menu.addAction("Добавить отсюда")
                     act_delete = menu.addAction("Удалить фразу")
-                    action = menu.exec(self.mapToGlobal(pos))
+                    act_props = menu.addAction("Свойства")
 
-                    if action == act_delete:
+                    chosen = menu.exec(self.mapToGlobal(pos))   # ← ОБЯЗАТЕЛЬНО
+
+                    # --- свойства ---
+                    if chosen == act_props:
+                        print("[PRESS] Open properties")
+                        self.open_phrase_properties(node)
+                        return
+
+                    # --- удаление ---
+                    if chosen == act_delete:
                         if self.confirm_delete(node.logic_id):
                             self.delete_phrase(node)
                         return
 
-                    if action == act_add_after:
+                    # --- добавление ---
+                    if chosen == act_add_after:
                         self.add_phrase_after(node)
                         return
 
-                    # мы попали в эту ноду → дальше НИКОГО не проверяем
                     return
+
 
             # ================= кнопка локали =================
             if node.locale_button_rect().contains(wx, wy):
@@ -894,21 +916,21 @@ class InfiniteGridWidget(QWidget):
                 return
 
             # ================= шестерёнка =================
-            if node.settings_button_rect().contains(wx, wy):
-                print(f"[PRESS] Settings button on {node.dialog_id}:{node.logic_id}")
+            #if node.settings_button_rect().contains(wx, wy):
+            #    print(f"[PRESS] Settings button on {node.dialog_id}:{node.logic_id}")
 
-                dialog_id = node.dialog_id.split(":")[0]
+            #    dialog_id = node.dialog_id.split(":")[0]
 
-                mw = self.constructor.window()
-                if hasattr(mw, "res_loader"):
-                    mw.res_loader.reload_dialog(dialog_id)
-                else:
-                    print("[ERROR] res_loader not found in main window")
+            #    mw = self.constructor.window()
+            #    if hasattr(mw, "res_loader"):
+            #        mw.res_loader.reload_dialog(dialog_id)
+            #    else:
+            #        print("[ERROR] res_loader not found in main window")
 
-                from windows.phrase_properties import PhraseProperties
-                dlg = PhraseProperties(self.constructor.window(), node)
-                dlg.show()
-                return
+            #    from windows.phrase_properties import PhraseProperties
+            #    dlg = PhraseProperties(self.constructor.window(), node)
+            #    dlg.show()
+            #    return
 
             # ================= крестик =================
             if node.right_button_rect().contains(wx, wy):
@@ -949,7 +971,6 @@ class InfiniteGridWidget(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             print("[PRESS] Panning start")
             self._last_mouse_pos = pos
-
 
     def start_editing(self, node):
         if node.editing:
