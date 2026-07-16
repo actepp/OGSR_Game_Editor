@@ -123,6 +123,26 @@ class InfiniteGridWidget(QWidget):
 
         self.resize_margin = 12  # зона нижнего правого угла
 
+    def confirm_delete(self, phrase_id: int) -> bool:
+        from PyQt6.QtWidgets import QMessageBox
+
+        box = QMessageBox(self)
+        box.setWindowTitle("Удаление фразы")
+        box.setText(f"Удалить фразу?\nПри подтверждении изменения сразу запишутся в XML.")
+        box.setIcon(QMessageBox.Icon.Warning)
+
+        # Кнопки
+        delete_btn = box.addButton("Удалить", QMessageBox.ButtonRole.AcceptRole)
+        cancel_btn = box.addButton("Отмена", QMessageBox.ButtonRole.RejectRole)
+
+        # Фиксированный размер
+        box.setFixedSize(320, 160)
+
+        # Модальное окно
+        result = box.exec()
+
+        return box.clickedButton() == delete_btn
+
     def find_main_window(self):
         mw = self.parent()
         while mw is not None:
@@ -758,14 +778,14 @@ class InfiniteGridWidget(QWidget):
                 if node.rect().contains(wx, wy):
 
                     menu = QMenu(self)
+                    menu.setFixedWidth(150)   # ← меню станет шире
 
                     act_add_after = menu.addAction("Добавить отсюда")
                     act_delete = menu.addAction("Удалить фразу")
-
                     action = menu.exec(self.mapToGlobal(pos))
-
                     if action == act_delete:
-                        self.delete_phrase(node)
+                        if self.confirm_delete(node.logic_id):
+                            self.delete_phrase(node)
                         return
 
                     if action == act_add_after:
