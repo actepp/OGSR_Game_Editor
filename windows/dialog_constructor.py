@@ -69,12 +69,8 @@ class DialogNode:
         )
 
     def locale_button_rect(self):
-        return QRectF(
-            self.x + 4 + self.left_button_size + 6,
-            self.y + (self.header_height - self.locale_button_size) / 2,
-            self.locale_button_size,
-            self.locale_button_size
-        )
+        return self.right_button_rect()
+
 
     def rect(self):
         return QRectF(self.x, self.y, self.width, self.height)
@@ -582,32 +578,31 @@ class InfiniteGridWidget(QWidget):
             # ------------------------------------------------
             #   ПРАВАЯ КНОПКА — крестик
             # ------------------------------------------------
-            rb = node.right_button_rect()
-            rb_sx = int(rb.x() * self.scale + self.offset_x)
-            rb_sy = int(rb.y() * self.scale + self.offset_y)
-            rb_sw = int(rb.width() * self.scale)
-            rb_sh = int(rb.height() * self.scale)
+            #rb = node.right_button_rect()
+            #rb_sx = int(rb.x() * self.scale + self.offset_x)
+            #rb_sy = int(rb.y() * self.scale + self.offset_y)
+            #rb_sw = int(rb.width() * self.scale)
+            #rb_sh = int(rb.height() * self.scale)
 
-            color = QColor(150, 60, 60) if not node.pressed_right_button else QColor(110, 40, 40)
-            painter.setBrush(color)
-            painter.setPen(QPen(QColor(90, 30, 30)))
-            painter.drawRect(rb_sx, rb_sy, rb_sw, rb_sh)
+            #color = QColor(150, 60, 60) if not node.pressed_right_button else QColor(110, 40, 40)
+            #painter.setBrush(color)
+            #painter.setPen(QPen(QColor(90, 30, 30)))
+            #painter.drawRect(rb_sx, rb_sy, rb_sw, rb_sh)
 
-            painter.setPen(QPen(QColor(255, 255, 255), 2))
-            painter.drawLine(rb_sx + 4, rb_sy + 4,
-                             rb_sx + rb_sw - 4, rb_sy + rb_sh - 4)
-            painter.drawLine(rb_sx + rb_sw - 4, rb_sy + 4,
-                             rb_sx + 4, rb_sy + rb_sh - 4)
+            #painter.setPen(QPen(QColor(255, 255, 255), 2))
+            #painter.drawLine(rb_sx + 4, rb_sy + 4,
+            #                 rb_sx + rb_sw - 4, rb_sy + rb_sh - 4)
+            #painter.drawLine(rb_sx + rb_sw - 4, rb_sy + 4,
+            #                 rb_sx + 4, rb_sy + rb_sh - 4)
 
             # ------------------------------------------------
-            #   КНОПКА ЛОКАЛИ
+            #   КНОПКА ЛОКАЛИ (теперь на месте крестика)
             # ------------------------------------------------
-            loc = node.locale_button_rect()
+            loc = node.right_button_rect()
             loc_sx = int(loc.x() * self.scale + self.offset_x)
             loc_sy = int(loc.y() * self.scale + self.offset_y)
             loc_sw = int(loc.width() * self.scale)
             loc_sh = int(loc.height() * self.scale)
-
 
             painter.setBrush(QColor(70, 70, 120))
             painter.setPen(QPen(QColor(40, 40, 80)))
@@ -615,11 +610,18 @@ class InfiniteGridWidget(QWidget):
 
             painter.setPen(QPen(QColor(255, 255, 255)))
             app_font = self.get_app_font()
-            font = QFont(app_font.family(), app_font.pointSize())
+
+            # уменьшаем базовый размер локали на 2pt
+            locale_base_size = max(1, app_font.pointSize() - 2)
+
+            font = QFont(app_font.family(), self.smart_font_size(locale_base_size))
             painter.setFont(font)
-            painter.drawText(QRect(loc_sx, loc_sy, loc_sw, loc_sh),
-                             Qt.AlignmentFlag.AlignCenter,
-                             node.locale.upper())
+
+            painter.drawText(
+                QRect(loc_sx, loc_sy, loc_sw, loc_sh),
+                Qt.AlignmentFlag.AlignCenter,
+                node.locale.upper()
+            )
 
             # ------------------------------------------------
             #   ВЫПАДАЮЩИЙ СПИСОК ЛОКАЛЕЙ
