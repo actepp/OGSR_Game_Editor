@@ -1,0 +1,20 @@
+{
+    "window": {
+        "width": 900,
+        "height": 600,
+        "maximized": false
+    },
+    "theme": "dark",
+    "font": {
+        "family": "Segoe UI",
+        "size": 10
+    },
+    "paths": {
+        "gamedata": "C:/github/NS_OGSR/gamedata",
+        "configs/gameplay": "C:/github/NS_OGSR/gamedata\\configs\\gameplay",
+        "configs/creatures": "C:/github/NS_OGSR/gamedata\\configs\\creatures",
+        "configs/text": "C:/github/NS_OGSR/gamedata\\configs\\text",
+        "spawns": "C:/github/NS_OGSR/gamedata\\spawns",
+        "scripts": "C:/github/NS_OGSR/gamedata\\scripts"
+    }
+}
