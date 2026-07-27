@@ -1570,7 +1570,7 @@ class DialogConstructor(QWidget):
         loader.reload_dialog(dialog_id)
 
         # обновление списка диалогов
-        self.update_filter("")
+        self.update_filter(self.search_box.text())
 
         # получить путь к XML
         dialog_data = loader.get_dialog(dialog_id)
