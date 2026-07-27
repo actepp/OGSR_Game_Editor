@@ -259,8 +259,9 @@ class AddButton(QPushButton):
 
 
 class DialogProperties(QDialog):
-    def __init__(self, parent, dialog_data):
+    def __init__(self, parent, dialog_data, is_new=False):
         super().__init__(parent)
+        self.is_new = is_new
         dialog_id = dialog_data["id"]
         self.active_editor = None
         self.active_label = None
@@ -268,8 +269,13 @@ class DialogProperties(QDialog):
         mw = self.parent()          # теперь это MainWindow
         self.loader = mw.res_loader
         self.dialog_id = dialog_id
-        self.loader.reload_dialog(dialog_id)
-        self.dialog_data = self.loader.get_dialog(dialog_id)
+        if is_new:
+            # Новый диалог — используем переданные данные
+            self.dialog_data = dialog_data
+        else:
+            # Старый диалог — загружаем из файлов
+            self.loader.reload_dialog(dialog_id)
+            self.dialog_data = self.loader.get_dialog(dialog_id)
         self.dialog_data["_delete_lines"] = []
         self.setWindowTitle(f"Свойства {dialog_id}")
         self.resize(650, 500)
@@ -321,17 +327,25 @@ class DialogProperties(QDialog):
         row += 1
         grid.addWidget(make_line(), row, 0, 1, 4)
         row += 1
-        xml_path = self.dialog_data["xml_path"].replace("\\", "/")
-        self.xml_path = xml_path
-        grid.addWidget(QLabel("Путь:"), row, 0)
-        grid.addWidget(make_vline(), row, 1)
-        lbl_xml = QLabel(xml_path)
-        lbl_xml.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        lbl_xml.setStyleSheet("color: #ccc;")
-        grid.addWidget(lbl_xml, row, 2, 1, 2)
-        row += 1
-        grid.addWidget(make_line(), row, 0, 1, 4)
-        row += 1
+        # Путь к файлу диалога
+        if not is_new:
+            xml_path = self.dialog_data["xml_path"].replace("\\", "/")
+            self.xml_path = xml_path
+
+            grid.addWidget(QLabel("Путь:"), row, 0)
+            grid.addWidget(make_vline(), row, 1)
+
+            lbl_xml = QLabel(xml_path)
+            lbl_xml.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            lbl_xml.setStyleSheet("color: #ccc;")
+            grid.addWidget(lbl_xml, row, 2, 1, 2)
+
+            row += 1
+            grid.addWidget(make_line(), row, 0, 1, 4)
+            row += 1
+        else:
+            # Новый диалог — пути нет
+            self.xml_path = None
         self.current_row = row
         self.render_section(
             section_name="preconditions",
@@ -542,25 +556,37 @@ class DialogProperties(QDialog):
 
 
     def save_dialog(self):
-        # --- Получаем loader из MainWindow ---
-        mw = self.parent()              # теперь родитель = MainWindow
+        mw = self.parent()
         loader = mw.res_loader
-
         dialog_id = self.dialog_data["id"]
 
-        # --- Сохраняем изменения в диалоге ---
+        if self.is_new:
+            # Записываем новый диалог в constructor_dialogs.xml
+            self.append_dialog_to_constructor_file()
+
+            # Перезагружаем все диалоги
+            loader._load_dialogs()
+
+            # ОБНОВЛЯЕМ СПИСОК ДИАЛОГОВ В GUI
+            mw.dialog_constructor.load_dialogs()   # ← ВАЖНО
+
+            EDIT_BUFFER.clear()
+            self.new_rows.clear()
+            self.close()
+            return
+
+        # --- Существующий диалог ---
         loader.save_dialog(dialog_id, self.dialog_data)
 
-        # --- Читаем XML для вставки новых строк ---
+        # --- Вставка новых строк (preconditions, has_info, etc.) ---
         try:
             with open(self.xml_path, "r", encoding="cp1251", errors="ignore") as f:
                 lines = f.readlines()
         except Exception:
             EDIT_BUFFER.clear()
-            self.close()        # окно свойств закрываем
+            self.close()
             return
 
-        # --- Ищем начало <dialog id="..."> ---
         dialog_start_idx = None
         pattern = re.compile(r'<dialog\b[^>]*\bid="' + re.escape(dialog_id) + r'"')
 
@@ -569,7 +595,6 @@ class DialogProperties(QDialog):
                 dialog_start_idx = i
                 break
 
-        # --- Вставляем новые строки, если есть ---
         if dialog_start_idx is not None and self.new_rows:
             if dialog_start_idx + 1 < len(lines):
                 indent_match = re.match(r'^(\s*)', lines[dialog_start_idx + 1])
@@ -602,15 +627,72 @@ class DialogProperties(QDialog):
             except Exception:
                 pass
 
-        # --- НИЧЕГО НЕ ПЕРЕЗАГРУЖАЕМ ---
-        # loader.reload_dialog(dialog_id)      # УБРАНО
-        # dc.refresh_dialog(dialog_id)         # УБРАНО
-
         EDIT_BUFFER.clear()
         self.new_rows.clear()
-
-        # --- Закрываем окно свойств, но НЕ редактор нод ---
         self.close()
+
+    def append_dialog_to_constructor_file(self):
+        loader = self.parent().res_loader
+        dialog_id = self.dialog_data["id"]
+
+        constructor_file = os.path.join(
+            loader.paths["configs/gameplay"],
+            "dialogs",
+            "constructor_dialogs.xml"
+        )
+
+        # если файла нет — создаём
+        if not os.path.exists(constructor_file):
+            content = (
+                '<?xml version="1.0" encoding="utf-8"?>\n'
+                '<game_dialogs>\n'
+                '</game_dialogs>\n'
+            )
+            with open(constructor_file, "wb") as f:
+                f.write(content.encode("utf-8"))
+
+        # читаем как байты
+        with open(constructor_file, "rb") as f:
+            raw = f.read()
+
+        end_tag = b"</game_dialogs>"
+        pos = raw.find(end_tag)
+
+        if pos == -1:
+            print("[ERROR] Не найден </game_dialogs>")
+            return
+
+        # формируем блок диалога
+        new_block = (
+            b'  <dialog id="' + dialog_id.encode("ascii") + b'">\n'
+            b'    <phrase_list>\n'
+        )
+
+        for phrase in self.dialog_data["phrase_list"]:
+            pid = str(phrase["id"]).encode("ascii")
+            text = phrase["text"].encode("utf-8")
+
+            new_block += (
+                b'      <phrase id="' + pid + b'">\n'
+                b'        <text>' + text + b'</text>\n'
+                b'      </phrase>\n'
+            )
+
+        new_block += (
+            b'    </phrase_list>\n'
+            b'  </dialog>\n'
+        )
+
+        # вставляем
+        new_raw = raw[:pos] + new_block + raw[pos:]
+
+        with open(constructor_file, "wb") as f:
+            f.write(new_raw)
+
+        print(f"[OK] Диалог {dialog_id} сохранён в constructor_dialogs.xml")
+
+        # перезагружаем диалоги
+        loader._load_dialogs()
 
 
     def check_save_enabled(self):

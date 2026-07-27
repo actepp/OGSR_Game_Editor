@@ -162,15 +162,23 @@ class ResourceLoader:
         }
 
     # ---------------------------------------------------------
-    # СОХРАНЕНИЕ ДИАЛОГА — ПОСТРОЧНО
+    # СОХРАНЕНИЕ ДИАЛОГА — ПОСТРОЧНО (ТОЛЬКО ДЛЯ СУЩЕСТВУЮЩИХ)
     # ---------------------------------------------------------
     def save_dialog(self, dialog_id, new_data):
+        global EDIT_BUFFER
+
+        # Диалог должен существовать в loader.dialogs
+        if dialog_id not in self.dialogs:
+            print(f"[ERROR] save_dialog: dialog '{dialog_id}' not found in loader.dialogs")
+            return
+
         entry = self.dialogs[dialog_id]
         lines = entry["lines"]
         path = entry["xml_path"]
 
         to_delete = new_data.get("_delete_lines", [])
 
+        # --- Ищем начало и конец диалога ---
         start = None
         end = None
 
@@ -190,8 +198,7 @@ class ResourceLoader:
             print(f"[ERROR] save_dialog: cannot find dialog boundaries for {dialog_id}")
             return
 
-        global EDIT_BUFFER
-
+        # --- Применяем EDIT_BUFFER ---
         if EDIT_BUFFER:
             for pair in EDIT_BUFFER:
                 old_tag   = pair["old_tag"]
@@ -213,6 +220,7 @@ class ResourceLoader:
                     print(f"[ERROR] Строка '{old_line}' не найдена в диалоге — отмена сохранения")
                     return
 
+        # --- Удаляем строки ---
         new_lines = []
 
         for i, line in enumerate(lines):
@@ -224,6 +232,7 @@ class ResourceLoader:
 
             new_lines.append(line)
 
+        # --- Сохраняем файл ---
         with open(path, "w", encoding="utf-8") as f:
             f.writelines(new_lines)
 

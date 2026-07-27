@@ -1650,7 +1650,6 @@ class DialogConstructor(QWidget):
         mw = self.parent()
         loader = mw.res_loader
 
-        # генерируем новый ID
         base = "dialog_by_constructor_"
         idx = 1
         while f"{base}{idx}" in loader.dialogs:
@@ -1658,65 +1657,23 @@ class DialogConstructor(QWidget):
 
         new_id = f"{base}{idx}"
 
-        # путь к файлу конструктора
-        constructor_file = os.path.join(
-            loader.paths["configs/gameplay"],
-            "dialogs",
-            "constructor_dialogs.xml"
-        )
+        dialog_data = {
+            "id": new_id,
+            "preconditions": [],
+            "has_info": [],
+            "dont_has_info": [],
+            "init_func": [],
+            "phrase_list": [
+                {
+                    "id": 0,
+                    "text": f"{new_id}_0",
+                    "next": []
+                }
+            ],
+            "_delete_lines": []
+        }
 
-        # если файла нет — создаём пустой шаблон
-        if not os.path.exists(constructor_file):
-            content = (
-                '<?xml version="1.0" encoding="utf-8"?>\n'
-                '<game_dialogs>\n'
-                '</game_dialogs>\n'
-            )
-            with open(constructor_file, "wb") as f:
-                f.write(content.encode("utf-8"))
-            print("[OK] Создан новый файл constructor_dialogs.xml")
-
-        # читаем файл как байты (без изменения кодировки)
-        with open(constructor_file, "rb") as f:
-            raw = f.read()
-
-        # ищем позицию </game_dialogs>
-        end_tag = b"</game_dialogs>"
-        pos = raw.find(end_tag)
-
-        if pos == -1:
-            print("[ERROR] Не найден </game_dialogs> в constructor_dialogs.xml")
-            return
-
-        # шаблон нового диалога
-        new_block = (
-            b'  <dialog id="' + new_id.encode("ascii") + b'">\n'
-            b'    <phrase_list>\n'
-            b'      <phrase id="0">\n'
-            b'        <text>' + new_id.encode("ascii") + b'_0</text>\n'
-            b'      </phrase>\n'
-            b'    </phrase_list>\n'
-            b'  </dialog>\n'
-        )
-
-        # вставляем перед </game_dialogs>
-        new_raw = raw[:pos] + new_block + raw[pos:]
-
-        # сохраняем файл без изменения кодировки
-        with open(constructor_file, "wb") as f:
-            f.write(new_raw)
-
-        print(f"[OK] Новый диалог {new_id} добавлен в constructor_dialogs.xml")
-
-        # перезагружаем все диалоги
-        loader._load_dialogs()
-
-        # обновляем список слева
-        self.load_dialogs()
-
-        # открываем окно свойств
-        dialog_data = loader.get_dialog(new_id)
-        dlg = DialogProperties(self.window(), dialog_data)
+        dlg = DialogProperties(self.window(), dialog_data, is_new=True)
         dlg.show()
 
     # --------------------------------------------------------

@@ -393,7 +393,7 @@ class MainWindow(QMainWindow):
         #self.reload_resources()  # ← ВАЖНО!
         widget = DialogConstructor(self)
         self.setCentralWidget(widget)
-
+        self.dialog_constructor = widget   # ← ВАЖНО: сохраняем ссылку
         self.workspace_active = True
         self.update_file_menu_state()
 
