@@ -55,6 +55,9 @@ class ResourceLoader:
             self.errors.append(f"Папка dialogs не найдена: {dialogs_dir}")
             return
 
+        # ВАЖНО: очищаем старый список диалогов
+        self.dialogs.clear()
+
         xml_files = [f for f in os.listdir(dialogs_dir) if f.endswith(".xml")]
         total = len(xml_files)
         processed = 0

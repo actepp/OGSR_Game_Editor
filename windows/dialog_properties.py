@@ -293,11 +293,21 @@ class DialogProperties(QDialog):
         main_layout.addLayout(grid)
         row = 0
         self.current_row = row
-        name_label = QLabel(dialog_id)
-        name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        name_label.setStyleSheet("font-size: 16px; font-weight: bold; padding: 6px;")
-        name_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        grid.addWidget(name_label, row, 0, 1, 4)
+        self.name_edit = QLineEdit(dialog_id)
+        self.name_edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.name_edit.setStyleSheet("""
+            QLineEdit {
+                font-size: 18px;
+                font-weight: bold;
+                padding: 6px;
+                background: #333;
+                color: #eee;
+                border: 1px solid #555;
+                border-radius: 4px;
+            }
+        """)
+        grid.addWidget(self.name_edit, row, 0, 1, 4)
+
         row += 1
         gameplay_path = os.path.join(self.loader.paths["configs/gameplay"])
         npc_name = find_npc_for_dialog(dialog_id, gameplay_path)
@@ -554,12 +564,81 @@ class DialogProperties(QDialog):
         # Переместить плюсик вниз
         self.redraw_plus_button()
 
+    def rename_dialog_id(self, old_id, new_id):
+        loader = self.loader
+
+        # 1. Меняем ID в dialog_data
+        self.dialog_data["id"] = new_id
+
+        # 2. Меняем ID в XML
+        entry = loader.dialogs.get(old_id)
+        if not entry:
+            print("[ERROR] Cannot rename dialog: entry not found")
+            return
+
+        xml_path = entry["xml_path"]
+
+        try:
+            with open(xml_path, "r", encoding="cp1251", errors="ignore") as f:
+                lines = f.readlines()
+
+            new_lines = []
+            for line in lines:
+                # заменяем id="old_id" → id="new_id"
+                new_lines.append(line.replace(f'id="{old_id}"', f'id="{new_id}"'))
+
+            with open(xml_path, "w", encoding="cp1251", errors="ignore") as f:
+                f.writelines(new_lines)
+
+            print(f"[OK] Dialog ID renamed: {old_id} → {new_id}")
+
+        except Exception as e:
+            print(f"[ERROR] rename_dialog_id: {e}")
+            return
+
+        # 3. Перезагружаем диалоги
+        loader._load_dialogs()
+
+        # 4. Обновляем список диалогов в GUI
+        mw = self.parent()
+        mw.dialog_constructor.load_dialogs()
 
     def save_dialog(self):
         mw = self.parent()
         loader = mw.res_loader
-        dialog_id = self.dialog_data["id"]
 
+        old_id = self.dialog_id
+        new_id = self.name_edit.text().strip()
+
+        # ============================================================
+        #   ПЕРЕИМЕНОВАНИЕ СУЩЕСТВУЮЩЕГО ДИАЛОГА
+        # ============================================================
+        if new_id != old_id:
+            print(f"[RENAME] {old_id} → {new_id}")
+
+            # Меняем ID в XML
+            self.rename_dialog_id(old_id, new_id)
+
+            # Обновляем внутренние данные
+            self.dialog_id = new_id
+            self.dialog_data["id"] = new_id
+
+            # Перезагружаем loader, чтобы он знал новый путь
+            loader._load_dialogs()
+
+            # Обновляем xml_path
+            entry = loader.dialogs.get(new_id)
+            if entry:
+                self.xml_path = entry["xml_path"]
+            else:
+                print("[ERROR] rename: new dialog entry not found after reload")
+
+        # Теперь dialog_id всегда актуальный
+        dialog_id = self.dialog_id
+
+        # ============================================================
+        #   СОХРАНЕНИЕ НОВОГО ДИАЛОГА
+        # ============================================================
         if self.is_new:
             # 1. Записываем новый диалог в constructor_dialogs.xml
             self.append_dialog_to_constructor_file()
@@ -629,7 +708,9 @@ class DialogProperties(QDialog):
             self.close()
             return
 
-        # --- Существующий диалог ---
+        # ============================================================
+        #   СОХРАНЕНИЕ СТАРОГО ДИАЛОГА
+        # ============================================================
         loader.save_dialog(dialog_id, self.dialog_data)
 
         # --- Вставка новых строк (preconditions, has_info, etc.) ---
@@ -684,6 +765,7 @@ class DialogProperties(QDialog):
         EDIT_BUFFER.clear()
         self.new_rows.clear()
         self.close()
+
 
     def append_dialog_to_constructor_file(self):
         loader = self.parent().res_loader
