@@ -561,15 +561,69 @@ class DialogProperties(QDialog):
         dialog_id = self.dialog_data["id"]
 
         if self.is_new:
-            # Записываем новый диалог в constructor_dialogs.xml
+            # 1. Записываем новый диалог в constructor_dialogs.xml
             self.append_dialog_to_constructor_file()
 
-            # Перезагружаем все диалоги
+            # 2. Перезагружаем все диалоги
             loader._load_dialogs()
 
-            # ОБНОВЛЯЕМ СПИСОК ДИАЛОГОВ В GUI
-            mw.dialog_constructor.load_dialogs()   # ← ВАЖНО
+            # 3. Находим путь к XML нового диалога
+            dialog_entry = loader.dialogs.get(dialog_id)
+            if dialog_entry:
+                xml_path = dialog_entry["xml_path"]
 
+                # 4. Вставляем свойства (new_rows)
+                try:
+                    with open(xml_path, "r", encoding="cp1251", errors="ignore") as f:
+                        lines = f.readlines()
+
+                    # ищем <dialog id="...">
+                    start = None
+                    pattern = re.compile(r'<dialog\b[^>]*\bid="' + re.escape(dialog_id) + r'"')
+                    for i, line in enumerate(lines):
+                        if pattern.search(line):
+                            start = i
+                            break
+
+                    if start is not None and self.new_rows:
+                        # определяем отступ
+                        if start + 1 < len(lines):
+                            indent_match = re.match(r'^(\s*)', lines[start + 1])
+                        else:
+                            indent_match = re.match(r'^(\s*)', lines[start])
+                        indent = indent_match.group(1) if indent_match else "    "
+
+                        # формируем строки свойств
+                        new_lines = []
+                        for row in self.new_rows:
+                            combo = row["combo"]
+                            label = row["label"]
+                            gui_tag = combo.currentText()
+                            xml_tag = TAG_MAP.get(gui_tag)
+                            if xml_tag is None:
+                                continue
+
+                            param_value = label.text().strip()
+                            if not param_value:
+                                continue
+
+                            new_lines.append(f"{indent}<{xml_tag}>{param_value}</{xml_tag}>\n")
+
+                        # вставляем сразу после <dialog ...>
+                        insert_pos = start + 1
+                        lines[insert_pos:insert_pos] = new_lines
+
+                        # сохраняем
+                        with open(xml_path, "w", encoding="cp1251", errors="ignore") as f:
+                            f.writelines(lines)
+
+                except Exception as e:
+                    print(f"[ERROR] Cannot insert properties into new dialog: {e}")
+
+            # 5. Обновляем список диалогов в GUI
+            mw.dialog_constructor.load_dialogs()
+
+            # 6. Очистка
             EDIT_BUFFER.clear()
             self.new_rows.clear()
             self.close()
