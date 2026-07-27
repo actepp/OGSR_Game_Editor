@@ -42,6 +42,9 @@ class ResourceLoader:
 
         self.ready = len(self.errors) == 0
 
+    def get_dialogs_xml_path(self):
+        return os.path.join(self.paths["configs/gameplay"], "dialogs", "dialogs.xml")
+
     # ---------------------------------------------------------
     # ЗАГРУЗКА ДИАЛОГОВ
     # ---------------------------------------------------------
