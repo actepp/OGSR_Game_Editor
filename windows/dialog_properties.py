@@ -726,6 +726,48 @@ class DialogProperties(QDialog):
         # ============================================================
         loader.save_dialog(dialog_id, self.dialog_data)
 
+        # ============================================================
+        #   СОЗДАНИЕ / ОБНОВЛЕНИЕ ФАЙЛА ЛОКАЛЕЙ
+        # ============================================================
+
+        # путь к папке text/dialogs
+        text_root = loader.paths["configs/text"]
+        dialogs_dir = os.path.join(text_root, "dialogs")
+
+        os.makedirs(dialogs_dir, exist_ok=True)
+
+        locale_file = os.path.join(dialogs_dir, "stable_dialogs_dialog_constructor.xml")
+
+        # имя первой фразы
+        phrase_id = self.dialog_data["phrase_list"][0]["text"]
+
+        # если файла нет — создаём пустой
+        if not os.path.exists(locale_file):
+            with open(locale_file, "w", encoding="windows-1251") as f:
+                f.write('<?xml version="1.0" encoding="windows-1251"?>\n<string_table>\n</string_table>')
+
+        # читаем XML
+        import xml.etree.ElementTree as ET
+        tree = ET.parse(locale_file)
+        root = tree.getroot()
+
+        # проверяем, есть ли уже такая строка
+        exists = root.find(f".//string[@id='{phrase_id}']")
+
+        if exists is None:
+            node = ET.Element("string", id=phrase_id)
+
+            rus = ET.SubElement(node, "rus")
+            rus.text = " "   # ← важно: пробел, не пустая строка
+
+            eng = ET.SubElement(node, "eng")
+            eng.text = " "   # ← важно
+
+            root.append(node)
+
+            self.indent(root)
+            tree.write(locale_file, encoding="windows-1251", xml_declaration=True)
+
         # --- Вставка новых строк (preconditions, has_info, etc.) ---
         try:
             with open(self.xml_path, "r", encoding="cp1251", errors="ignore") as f:
@@ -779,28 +821,32 @@ class DialogProperties(QDialog):
         self.new_rows.clear()
         self.close()
 
-
     def append_dialog_to_constructor_file(self):
         loader = self.parent().res_loader
         dialog_id = self.dialog_data["id"]
-        # Проверка: диалог с таким ID уже существует
 
+        # ============================================================
+        #   Проверка уникальности ID диалога
+        # ============================================================
         if dialog_id in loader.dialogs:
-            msg = QMessageBox()
+            msg = QMessageBox(self)
             msg.setIcon(QMessageBox.Icon.Warning)
             msg.setWindowTitle("Ошибка")
             msg.setText(f"Диалог с именем '{dialog_id}' уже существует.")
-            msg.setInformativeText("Выберите другое имя.")
+            msg.setInformativeText("Введите другое имя.")
             msg.exec()
             return
 
+        # ============================================================
+        #   Путь к файлу constructor_dialogs.xml
+        # ============================================================
         constructor_file = os.path.join(
             loader.paths["configs/gameplay"],
             "dialogs",
             "constructor_dialogs.xml"
         )
 
-        # если файла нет — создаём
+        # если файла нет — создаём пустой шаблон
         if not os.path.exists(constructor_file):
             content = (
                 '<?xml version="1.0" encoding="utf-8"?>\n'
@@ -821,7 +867,9 @@ class DialogProperties(QDialog):
             print("[ERROR] Не найден </game_dialogs>")
             return
 
-        # формируем блок диалога
+        # ============================================================
+        #   Формируем блок диалога
+        # ============================================================
         new_block = (
             b'  <dialog id="' + dialog_id.encode("ascii") + b'">\n'
             b'    <phrase_list>\n'
@@ -842,7 +890,7 @@ class DialogProperties(QDialog):
             b'  </dialog>\n'
         )
 
-        # вставляем
+        # вставляем перед </game_dialogs>
         new_raw = raw[:pos] + new_block + raw[pos:]
 
         with open(constructor_file, "wb") as f:
@@ -850,9 +898,79 @@ class DialogProperties(QDialog):
 
         print(f"[OK] Диалог {dialog_id} сохранён в constructor_dialogs.xml")
 
-        # перезагружаем диалоги
+        # ============================================================
+        #   СОЗДАНИЕ / ОБНОВЛЕНИЕ ФАЙЛА ЛОКАЛЕЙ (ручная запись)
+        # ============================================================
+
+        phrase_id = self.dialog_data["phrase_list"][0]["text"]
+
+        text_root = loader.paths["configs/text"]
+        dialogs_dir = os.path.join(text_root, "dialogs")
+        os.makedirs(dialogs_dir, exist_ok=True)
+
+        locale_file = os.path.join(dialogs_dir, "stable_dialogs_dialog_constructor.xml")
+
+        # если файла нет — создаём пустой
+        if not os.path.exists(locale_file):
+            with open(locale_file, "w", encoding="windows-1251") as f:
+                f.write('<?xml version="1.0" encoding="windows-1251"?>\n<string_table>\n</string_table>')
+
+        # читаем как текст
+        with open(locale_file, "r", encoding="windows-1251") as f:
+            lines = f.readlines()
+
+        # проверяем наличие строки
+        tag = f'<string id="{phrase_id}">'
+        if any(tag in line for line in lines):
+            loader._load_dialogs()
+            return  # уже есть
+
+        # формируем блок вручную
+        new_block = (
+            f'    <string id="{phrase_id}">\n'
+            f'        <rus></rus>\n'
+            f'        <eng></eng>\n'
+            f'    </string>\n'
+        )
+
+        # ищем позицию </string_table>
+        end_idx = None
+        for i, line in enumerate(lines):
+            if "</string_table>" in line:
+                end_idx = i
+                break
+
+        if end_idx is None:
+            print("[ERROR] Не найден </string_table>")
+            return
+
+        # вставляем
+        lines.insert(end_idx, new_block)
+
+        # сохраняем
+        with open(locale_file, "w", encoding="windows-1251") as f:
+            f.writelines(lines)
+
+        # ============================================================
+        #   Перезагрузка диалогов
+        # ============================================================
         loader._load_dialogs()
 
+
+    def indent(self, elem, level=0):
+        i = "\n" + level * "    "
+        if len(elem):
+            if not elem.text or not elem.text.strip():
+                elem.text = i + "    "
+            for child in elem:
+                self.indent(child, level + 1)
+            if not elem.tail or not elem.tail.strip():
+                elem.tail = i
+        else:
+            if not elem.text or not elem.text.strip():
+                elem.text = ""
+            if not elem.tail or not elem.tail.strip():
+                elem.tail = i
 
     def check_save_enabled(self):
         for row in self.new_rows:
