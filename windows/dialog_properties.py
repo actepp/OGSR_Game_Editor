@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QPushButton,
     QHBoxLayout, QGridLayout, QFrame, QLineEdit,
-    QWidget, QSizePolicy, QComboBox
+    QWidget, QSizePolicy, QComboBox, QMessageBox
 )
 from PyQt6.QtCore import Qt, QObject, QEvent
 
@@ -610,30 +610,43 @@ class DialogProperties(QDialog):
         old_id = self.dialog_id
         new_id = self.name_edit.text().strip()
 
-        # ============================================================
-        #   ПЕРЕИМЕНОВАНИЕ СУЩЕСТВУЮЩЕГО ДИАЛОГА
-        # ============================================================
+        # --- Проверка уникальности имени диалога ---
+        if new_id in loader.dialogs and new_id != old_id:
+            from PyQt6.QtWidgets import QMessageBox
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setWindowTitle("Имя занято")
+            msg.setText(f"Диалог с именем '{new_id}' уже существует.")
+            msg.setInformativeText("Введите другое имя.")
+            msg.exec()
+            return  # ← ВАЖНО: просто выходим, окно свойств остаётся открытым
+
         if new_id != old_id:
             print(f"[RENAME] {old_id} → {new_id}")
-
-            # Меняем ID в XML
             self.rename_dialog_id(old_id, new_id)
-
-            # Обновляем внутренние данные
             self.dialog_id = new_id
             self.dialog_data["id"] = new_id
-
-            # Перезагружаем loader, чтобы он знал новый путь
             loader._load_dialogs()
-
-            # Обновляем xml_path
             entry = loader.dialogs.get(new_id)
             if entry:
                 self.xml_path = entry["xml_path"]
-            else:
-                print("[ERROR] rename: new dialog entry not found after reload")
 
-        # Теперь dialog_id всегда актуальный
+        # --- Имя первой фразы под текущее имя диалога ---
+        base = self.dialog_id
+
+        if self.dialog_data.get("phrase_list"):
+            used = set()
+            if getattr(loader, "text_loader", None):
+                used.update(loader.text_loader.localization.keys())
+
+            idx = 0
+            while True:
+                candidate = f"{base}_{idx}"
+                if candidate not in used:
+                    self.dialog_data["phrase_list"][0]["text"] = candidate
+                    break
+                idx += 1
+
         dialog_id = self.dialog_id
 
         # ============================================================
@@ -770,6 +783,16 @@ class DialogProperties(QDialog):
     def append_dialog_to_constructor_file(self):
         loader = self.parent().res_loader
         dialog_id = self.dialog_data["id"]
+        # Проверка: диалог с таким ID уже существует
+
+        if dialog_id in loader.dialogs:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setWindowTitle("Ошибка")
+            msg.setText(f"Диалог с именем '{dialog_id}' уже существует.")
+            msg.setInformativeText("Выберите другое имя.")
+            msg.exec()
+            return
 
         constructor_file = os.path.join(
             loader.paths["configs/gameplay"],
