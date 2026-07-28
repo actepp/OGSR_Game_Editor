@@ -9,7 +9,7 @@ from windows.dialog_node_logic import DialogNodeLogic
 from PyQt6.QtGui import QTextLayout, QTextOption
 from PyQt6.QtCore import QPointF, QEvent
 import os
-import math
+import re
 from windows.phrase_properties import PhraseProperties
 import xml.etree.ElementTree as ET
 
@@ -212,11 +212,11 @@ class InfiniteGridWidget(QWidget):
         children = {}
         for pid, phrase in graph.phrases.items():
             for nxt in phrase.next_list:
-                children.setdefault(pid, []).append(int(nxt))
+                # БЫЛО: children.setdefault(pid, []).append(int(nxt))
+                children.setdefault(pid, []).append(nxt)  # строка
 
         positions = {}
 
-        # раскладка одного дерева
         def layout(pid, x, y):
             if pid in positions:
                 return
@@ -242,13 +242,11 @@ class InfiniteGridWidget(QWidget):
         child_pids = {n for phrase in graph.phrases.values() for n in phrase.next_list}
         root_candidates = list(all_pids - child_pids)
 
-        # раскладываем каждое дерево отдельно
         offset_x = 50
         for root in sorted(root_candidates):
             layout(root, offset_x, 50)
             offset_x += 500
 
-        # раскладываем висячие узлы
         orphan_x = offset_x
         orphan_y = 50
         for pid in sorted(all_pids):
@@ -261,12 +259,12 @@ class InfiniteGridWidget(QWidget):
             x, y = positions[pid]
 
             node = DialogNode(f"{graph.dialog_id}:{pid}", x, y)
-            node.logic_id = pid
+            node.logic_id = pid  # строковый id
 
             node.text_key = phrase.text_key
             node.logic_text_real = phrase.text_real
-
             node.logic_next_list = phrase.next_list
+            node.parent = phrase.parent
 
             self.nodes.append(node)
 
@@ -1135,6 +1133,25 @@ class InfiniteGridWidget(QWidget):
                 node.x, node.y = cmd["new"]
                 self.update()
 
+    def generate_locale_key(self, phrase_id: str):
+        """
+        Генерирует имя локали по имени фразы:
+        TV_dialog_0 → TV_dialog_0_text (+ защита от дубликатов)
+        """
+        mw = self.find_main_window()
+        loader = mw.res_loader
+
+        used = set(loader.text_loader.localization.keys())
+
+        candidate = f"{phrase_id}_text"
+        idx = 0
+        while candidate in used:
+            candidate = f"{phrase_id}_text_{idx}"
+            idx += 1
+
+        return candidate
+
+
     def save_node_locale(self, node):
         # ищем MainWindow
         mw = self.parent()
@@ -1146,63 +1163,164 @@ class InfiniteGridWidget(QWidget):
             return
 
         loader = mw.res_loader
-        text_root = loader.paths["configs/text"]
 
-        key = node.text_key
+        # ------------------------------------------------------------
+        # 0. ОПРЕДЕЛЯЕМ КЛЮЧ ЛОКАЛИ
+        # ------------------------------------------------------------
+        # если у ноды уже есть text_key — используем его
+        if node.text_key and node.text_key.strip():
+            key = node.text_key.strip()
+        else:
+            # если нет — генерируем по имени фразы (id)
+            phrase_id = node.logic_id  # TV_dialog_0
+            key = self.generate_locale_key(phrase_id)  # TV_dialog_0_text
+            node.text_key = key
+
         locale = node.locale
         new_text = node.logic_text_real
 
-        # --- РЕКУРСИВНЫЙ ОБХОД ВСЕХ ПАПОК ---
-        for dirpath, dirnames, filenames in os.walk(text_root):
-            for filename in filenames:
-                if not filename.endswith(".xml"):
-                    continue
+        # ------------------------------------------------------------
+        # 1. ПРОВЕРЯЕМ — СУЩЕСТВУЕТ ЛИ ЛОКАЛЬ
+        # ------------------------------------------------------------
+        loc = loader.text_loader.localization.get(key)
 
-                full_path = os.path.join(dirpath, filename)
+        # ------------------------------------------------------------
+        # 2. ЕСЛИ ЛОКАЛИ НЕТ — СОЗДАЁМ ЕЁ В ПРАВИЛЬНОМ ФАЙЛЕ
+        # ------------------------------------------------------------
+        if loc is None:
+            print(f"[INFO] Locale '{key}' not found → creating new locale")
 
-                with open(full_path, "r", encoding="windows-1251") as f:
-                    lines = f.readlines()
+            parent = getattr(node, "parent", None)
+            locale_file = None
 
-                inside_string = False
-                modified = False
+            # поднимаемся вверх по дереву — ищем предка с локалью
+            while parent is not None:
+                parent_key = parent.text_key
+                parent_loc = loader.text_loader.localization.get(parent_key)
 
-                for i, line in enumerate(lines):
-                    # нашли начало блока <string id="...">
-                    if f'<string id="{key}"' in line:
-                        inside_string = True
+                if parent_loc:
+                    locale_file = parent_loc["source_file"]
+                    print(f"[INFO] Found ancestor locale in: {locale_file}")
+                    break
 
-                    if inside_string:
-                        # вариант 1: <rus>...</rus>
-                        if f"<{locale}>" in line:
-                            indent = line[:len(line) - len(line.lstrip())]
-                            lines[i] = f"{indent}<{locale}>{new_text}</{locale}>\n"
-                            modified = True
-                            inside_string = False
-                            break
+                parent = getattr(parent, "parent", None)
 
-                        # вариант 2: атрибуты rus="..."
-                        if f'{locale}="' in line:
-                            import re
-                            lines[i] = re.sub(
-                                rf'{locale}=".*?"',
-                                f'{locale}="{new_text}"',
-                                line
-                            )
-                            modified = True
-                            inside_string = False
-                            break
+            # если ни один предок не имеет локали → используем файл локалей диалога
+            if locale_file is None:
+                dialog_id = str(node.dialog_id).split(":")[0]
 
-                        if "</string>" in line:
-                            inside_string = False
+                dialog_xml_path = loader.dialogs[dialog_id]["xml_path"]
+                base = os.path.splitext(os.path.basename(dialog_xml_path))[0]
+                if base.startswith("dialogs_"):
+                    base = base[len("dialogs_"):]
 
-                if modified:
-                    with open(full_path, "w", encoding="windows-1251") as f:
-                        f.writelines(lines)
+                text_dialogs = os.path.join(loader.paths["configs/text"], "dialogs")
+                locale_file = os.path.join(text_dialogs, f"stable_dialogs_{base}.xml")
 
-                    print(f"[OK] Locale saved: {key} → {locale} = {new_text}")
-                    return  # ← ВАЖНО: выходим после первого найденного файла
+                print(f"[INFO] No ancestor locale found → using dialog locale file: {locale_file}")
 
-        print(f"[WARN] Locale key '{key}' not found in ANY text XML")
+                if not os.path.exists(locale_file):
+                    with open(locale_file, "w", encoding="windows-1251") as f:
+                        f.write('<?xml version="1.0" encoding="windows-1251"?>\n<string_table>\n</string_table>')
+                    print(f"[OK] Created new locale file: {locale_file}")
+
+            # читаем файл локалей
+            try:
+                with open(locale_file, "r", encoding="windows-1251") as f:
+                    loc_lines = f.readlines()
+            except Exception as e:
+                print(f"[ERROR] Cannot read locale file {locale_file}: {e}")
+                return
+
+            # создаём новый блок
+            new_block = (
+                f'    <string id="{key}">\n'
+                f'        <rus></rus>\n'
+                f'        <eng></eng>\n'
+                f'    </string>\n'
+            )
+
+            insert_idx = None
+            for i, line in enumerate(loc_lines):
+                if "</string_table>" in line:
+                    insert_idx = i
+                    break
+
+            if insert_idx is None:
+                print("[ERROR] Cannot find </string_table> in locale file")
+                return
+
+            loc_lines.insert(insert_idx, new_block)
+
+            try:
+                with open(locale_file, "w", encoding="windows-1251") as f:
+                    f.writelines(loc_lines)
+            except Exception as e:
+                print(f"[ERROR] Cannot write locale file {locale_file}: {e}")
+                return
+
+            print(f"[OK] New locale '{key}' created in {locale_file}")
+
+            loader.text_loader.localization[key] = {
+                "rus": "",
+                "eng": "",
+                "source_file": locale_file
+            }
+
+            loc = loader.text_loader.localization[key]
+
+        # ------------------------------------------------------------
+        # 3. ОБЫЧНОЕ СОХРАНЕНИЕ ЛОКАЛИ (В ОДНОМ ФАЙЛЕ)
+        # ------------------------------------------------------------
+        locale_file = loc["source_file"]
+
+        try:
+            with open(locale_file, "r", encoding="windows-1251") as f:
+                lines = f.readlines()
+        except Exception as e:
+            print(f"[ERROR] Cannot read locale file {locale_file}: {e}")
+            return
+
+        inside_string = False
+        modified = False
+
+        for i, line in enumerate(lines):
+            if f'<string id="{key}"' in line:
+                inside_string = True
+
+            if inside_string:
+                if f"<{locale}>" in line:
+                    indent = line[:len(line) - len(line.lstrip())]
+                    lines[i] = f"{indent}<{locale}>{new_text}</{locale}>\n"
+                    modified = True
+                    inside_string = False
+                    break
+
+                if f'{locale}="' in line:
+                    import re
+                    lines[i] = re.sub(
+                        rf'{locale}=".*?"',
+                        f'{locale}="{new_text}"',
+                        line
+                    )
+                    modified = True
+                    inside_string = False
+                    break
+
+                if "</string>" in line:
+                    inside_string = False
+
+        if modified:
+            try:
+                with open(locale_file, "w", encoding="windows-1251") as f:
+                    f.writelines(lines)
+            except Exception as e:
+                print(f"[ERROR] Cannot write locale file {locale_file}: {e}")
+                return
+
+            print(f"[OK] Locale saved: {key} → {locale} = {new_text}")
+        else:
+            print(f"[WARN] Locale key '{key}' not found in {locale_file}")
 
 
     # --------------------------------------------------------
@@ -1349,29 +1467,56 @@ class InfiniteGridWidget(QWidget):
 
 
     def add_phrase_after(self, node: DialogNode):
-        dialog_id = node.dialog_id.split(":")[0]
-        phrase_id = str(node.logic_id)
-
         mw = self.find_main_window()
         loader = mw.res_loader
 
+        dialog_id = node.dialog_id.split(":")[0]
         xml_path = loader.dialogs[dialog_id]["xml_path"]
 
-        # читаем файл
-        with open(xml_path, "r", encoding="utf-8") as f:
+        # читаем XML диалога
+        with open(xml_path, "r", encoding="windows-1251") as f:
             lines = f.readlines()
 
-        # ищем максимальный id
-        import re
-        max_id = 0
-        for line in lines:
-            m = re.search(r'<phrase\s+[^>]*id="(\d+)"', line)
-            if m:
-                max_id = max(max_id, int(m.group(1)))
+        # ------------------------------------------------------------
+        #   ГЕНЕРАЦИЯ имени фразы: dialog_id_N
+        # ------------------------------------------------------------
+        def generate_phrase_id(dialog_id):
+            used = set()
 
-        new_id = max_id + 1
+            # собираем все id фраз
+            import re
+            for line in lines:
+                m = re.search(r'<phrase\s+[^>]*id="([^"]+)"', line)
+                if m:
+                    used.add(m.group(1))
 
-        # ищем текущую фразу
+            idx = 0
+            while True:
+                candidate = f"{dialog_id}_{idx}"
+                if candidate not in used:
+                    return candidate
+                idx += 1
+
+        new_phrase_id = generate_phrase_id(dialog_id)
+
+        # ------------------------------------------------------------
+        #   ГЕНЕРАЦИЯ имени локали: phrase_id_text
+        # ------------------------------------------------------------
+        def generate_locale_key(phrase_id):
+            used = set(loader.text_loader.localization.keys())
+            candidate = f"{phrase_id}_text"
+            idx = 0
+            while candidate in used:
+                candidate = f"{phrase_id}_text_{idx}"
+                idx += 1
+            return candidate
+
+        locale_key = generate_locale_key(new_phrase_id)
+
+        # ------------------------------------------------------------
+        #   ИЩЕМ текущую фразу
+        # ------------------------------------------------------------
+        phrase_id = node.logic_id  # теперь строка
         start = None
         end = None
 
@@ -1394,11 +1539,12 @@ class InfiniteGridWidget(QWidget):
             print("[add_phrase_after] phrase end not found")
             return
 
-        # вставляем новую фразу перед </phrase_list>
+        # ------------------------------------------------------------
+        #   ВСТАВКА новой фразы
+        # ------------------------------------------------------------
         insert_index = None
         for i, line in enumerate(lines):
             if "<phrase_list" in line:
-                # ищем конец phrase_list
                 for j in range(i+1, len(lines)):
                     if "</phrase_list>" in lines[j]:
                         insert_index = j
@@ -1410,37 +1556,93 @@ class InfiniteGridWidget(QWidget):
             return
 
         new_phrase = [
-            f'        <phrase id="{new_id}">\n',
-            f'            <text>new_phrase</text>\n',
+            f'        <phrase id="{new_phrase_id}">\n',
+            f'            <text>{locale_key}</text>\n',
             f'        </phrase>\n'
         ]
 
         lines[insert_index:insert_index] = new_phrase
 
-        # обновляем next у текущей фразы
-        new_next = f"<next>{new_id}</next>"
-
-        # ищем последнюю строку <next> внутри фразы
+        # ------------------------------------------------------------
+        #   ДОБАВЛЯЕМ <next> родителю
+        # ------------------------------------------------------------
+        new_next = f"<next>{new_phrase_id}</next>"
         insert_pos = None
+
         for i in range(start, end + 1):
             if "<next>" in lines[i]:
                 insert_pos = i + 1
 
         if insert_pos is not None:
-            # вставляем новый next после последнего существующего
             lines.insert(insert_pos, f"            {new_next}\n")
         else:
-            # если next не было — добавляем перед </phrase>
             lines.insert(end, f"            {new_next}\n")
 
-        # сохраняем
-        with open(xml_path, "w", encoding="utf-8") as f:
+        # ------------------------------------------------------------
+        #   СОХРАНЯЕМ XML
+        # ------------------------------------------------------------
+        with open(xml_path, "w", encoding="windows-1251") as f:
             f.writelines(lines)
 
-        # перезагрузка диалога
+        # ------------------------------------------------------------
+        #   СОЗДАЁМ ЛОКАЛЬ ДЛЯ НОВОЙ ФРАЗЫ
+        # ------------------------------------------------------------
+        parent = node.parent
+        locale_file = None
+
+        while parent is not None:
+            parent_key = parent.text_key
+            parent_loc = loader.text_loader.localization.get(parent_key)
+            if parent_loc:
+                locale_file = parent_loc["source_file"]
+                break
+            parent = getattr(parent, "parent", None)
+
+        if locale_file is None:
+            dialog_xml_path = loader.dialogs[dialog_id]["xml_path"]
+            base = os.path.splitext(os.path.basename(dialog_xml_path))[0]
+            if base.startswith("dialogs_"):
+                base = base[len("dialogs_"):]
+            text_dialogs = os.path.join(loader.paths["configs/text"], "dialogs")
+            locale_file = os.path.join(text_dialogs, f"stable_dialogs_{base}.xml")
+
+            if not os.path.exists(locale_file):
+                with open(locale_file, "w", encoding="windows-1251") as f:
+                    f.write('<?xml version="1.0" encoding="windows-1251"?>\n<string_table>\n</string_table>')
+
+        # читаем файл локалей
+        with open(locale_file, "r", encoding="windows-1251") as f:
+            loc_lines = f.readlines()
+
+        new_block = (
+            f'    <string id="{locale_key}">\n'
+            f'        <rus></rus>\n'
+            f'        <eng></eng>\n'
+            f'    </string>\n'
+        )
+
+        insert_idx = None
+        for i, line in enumerate(loc_lines):
+            if "</string_table>" in line:
+                insert_idx = i
+                break
+
+        loc_lines.insert(insert_idx, new_block)
+
+        with open(locale_file, "w", encoding="windows-1251") as f:
+            f.writelines(loc_lines)
+
+        loader.text_loader.localization[locale_key] = {
+            "rus": "",
+            "eng": "",
+            "source_file": locale_file
+        }
+
+        # ------------------------------------------------------------
+        #   ПЕРЕЗАГРУЗКА ДИАЛОГА
+        # ------------------------------------------------------------
         loader.reload_dialog(dialog_id)
 
-        # перерисовка
         dialog_data = loader.get_dialog(dialog_id)
         xml_root = dialog_data["xml_node"]
 

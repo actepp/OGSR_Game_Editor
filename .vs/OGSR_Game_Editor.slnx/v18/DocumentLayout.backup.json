@@ -3,16 +3,20 @@
   "WorkspaceRootPath": "E:\\GitHub\\OGSR_Game_Editor\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_properties.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:windows\\dialog_properties.py||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_constructor.py||{8B382828-6202-11D1-8870-0000F87579D2}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:windows\\dialog_constructor.py||{8B382828-6202-11D1-8870-0000F87579D2}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_node_logic.py||{8B382828-6202-11D1-8870-0000F87579D2}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:windows\\dialog_node_logic.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_properties.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:windows\\dialog_properties.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\windows\\phrase_properties.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:windows\\phrase_properties.py||{8B382828-6202-11D1-8870-0000F87579D2}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\res_loader.py||{8B382828-6202-11D1-8870-0000F87579D2}",
@@ -25,10 +29,6 @@
     {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\windows\\themes.py||{8B382828-6202-11D1-8870-0000F87579D2}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:windows\\themes.py||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\windows\\phrase_properties.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:windows\\phrase_properties.py||{8B382828-6202-11D1-8870-0000F87579D2}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\GitHub\\OGSR_Game_Editor\\text_loader.py||{8B382828-6202-11D1-8870-0000F87579D2}",
@@ -54,7 +54,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 11,
+          "SelectedChildIndex": 12,
           "Children": [
             {
               "$type": "Bookmark",
@@ -90,7 +90,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 4,
               "Title": "res_loader.py",
               "DocumentMoniker": "E:\\GitHub\\OGSR_Game_Editor\\res_loader.py",
               "RelativeDocumentMoniker": "res_loader.py",
@@ -98,12 +98,11 @@
               "RelativeToolTip": "res_loader.py",
               "ViewState": "AgIAAB0AAAAAAAAAAAAAADkAAAAIAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-06-29T17:30:13.675Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-29T17:30:13.675Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 6,
               "Title": "themes.py",
               "DocumentMoniker": "E:\\GitHub\\OGSR_Game_Editor\\windows\\themes.py",
               "RelativeDocumentMoniker": "windows\\themes.py",
@@ -127,7 +126,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 5,
               "Title": "UI.py",
               "DocumentMoniker": "E:\\GitHub\\OGSR_Game_Editor\\UI.py",
               "RelativeDocumentMoniker": "UI.py",
@@ -151,54 +150,55 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 2,
               "Title": "dialog_properties.py",
               "DocumentMoniker": "E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_properties.py",
               "RelativeDocumentMoniker": "windows\\dialog_properties.py",
               "ToolTip": "E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_properties.py",
               "RelativeToolTip": "windows\\dialog_properties.py",
-              "ViewState": "AgIAADcDAAAAAAAAAAAAADcDAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAIwBAAAAAAAAAAAAAKIBAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
               "WhenOpened": "2026-06-29T18:01:10.966Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 0,
               "Title": "dialog_constructor.py",
               "DocumentMoniker": "E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_constructor.py",
               "RelativeDocumentMoniker": "windows\\dialog_constructor.py",
               "ToolTip": "E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_constructor.py",
               "RelativeToolTip": "windows\\dialog_constructor.py",
-              "ViewState": "AgIAAOkFAAAAAAAAAAAAAPgFAAA+AAAAAAAAAA==",
+              "ViewState": "AgIAAIIEAAAAAAAAAAAAAIIEAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
               "WhenOpened": "2026-06-29T16:04:48.095Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 1,
               "Title": "dialog_node_logic.py",
               "DocumentMoniker": "E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_node_logic.py",
               "RelativeDocumentMoniker": "windows\\dialog_node_logic.py",
               "ToolTip": "E:\\GitHub\\OGSR_Game_Editor\\windows\\dialog_node_logic.py",
               "RelativeToolTip": "windows\\dialog_node_logic.py",
-              "ViewState": "AgIAAA8AAAAAAAAAAAAjwBQAAAASAAAAAAAAAA==",
+              "ViewState": "AgIAAAMAAAAAAAAAAAAWwA4AAAAaAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
               "WhenOpened": "2026-07-13T18:14:16.822Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 6,
+              "DocumentIndex": 3,
               "Title": "phrase_properties.py",
               "DocumentMoniker": "E:\\GitHub\\OGSR_Game_Editor\\windows\\phrase_properties.py",
               "RelativeDocumentMoniker": "windows\\phrase_properties.py",
               "ToolTip": "E:\\GitHub\\OGSR_Game_Editor\\windows\\phrase_properties.py",
               "RelativeToolTip": "windows\\phrase_properties.py",
-              "ViewState": "AgIAAHIAAAAAAAAAAAAWwH8AAAAPAAAAAAAAAA==",
+              "ViewState": "AgIAACcAAAAAAAAAAAAAAH0AAAAxAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-07-15T10:08:28.481Z"
+              "WhenOpened": "2026-07-15T10:08:28.481Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",

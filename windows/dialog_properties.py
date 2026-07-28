@@ -396,6 +396,39 @@ class DialogProperties(QDialog):
         btn_layout.addWidget(btn_cancel)
         self.check_save_enabled()
 
+    def generate_phrase_name(self, dialog_id):
+        loader = self.loader
+
+        used = set()
+
+        # собираем все ключи фраз
+        for d in loader.dialogs.values():
+            for phrase in d["xml_node"].findall(".//phrase"):
+                t = phrase.find("text")
+                if t is not None and t.text:
+                    used.add(t.text.strip())
+
+        # ищем свободное имя
+        idx = 0
+        while True:
+            candidate = f"{dialog_id}_{idx}"
+            if candidate not in used:
+                return candidate
+            idx += 1
+
+    def generate_locale_key(self, phrase_name):
+        loader = self.loader
+
+        used = set(loader.text_loader.localization.keys())
+
+        idx = 0
+        while True:
+            candidate = f"{phrase_name}_text"
+            if candidate not in used:
+                return candidate
+            idx += 1
+
+
     def render_section(self, section_name, xml_tag, commit_func):
         lst = self.dialog_data.get(section_name)
         if not lst:

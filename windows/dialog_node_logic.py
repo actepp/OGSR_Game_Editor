@@ -12,7 +12,7 @@ class PhraseNode:
         self.text_key = ""          # ключ из <text>
         self.text_real = ""         # реальный текст из configs/text
         self.next_list: list[int] = []   # список детей (несколько <next>)
-
+        self.parent = None
 
 # ============================================================
 #   Граф диалога (цепочка фраз)
@@ -21,8 +21,7 @@ class PhraseNode:
 class DialogGraph:
     def __init__(self, dialog_id: str):
         self.dialog_id = dialog_id
-        self.phrases: dict[int, PhraseNode] = {}
-
+        self.phrases: dict[str, PhraseNode] = {}
 
 # ============================================================
 #   Основная логика диалогов
@@ -102,7 +101,7 @@ class DialogNodeLogic:
             return graph
 
         for phrase in phrase_list.findall("phrase"):
-            pid = int(phrase.get("id"))
+            pid = phrase.get("id").strip()
             node = PhraseNode(pid)
 
             # ключ текста
@@ -113,10 +112,15 @@ class DialogNodeLogic:
 
             # собираем ВСЕ <next>
             node.next_list = [
-                int(n.text) for n in phrase.findall("next")
+                n.text.strip() for n in phrase.findall("next")
                 if n.text and n.text.strip()
             ]
 
             graph.phrases[pid] = node
+        # после заполнения graph.phrases
+        for pid, node in graph.phrases.items():
+            for child_id in node.next_list:
+                if child_id in graph.phrases:
+                    graph.phrases[child_id].parent = node
 
         return graph
