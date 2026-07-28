@@ -1556,9 +1556,9 @@ class InfiniteGridWidget(QWidget):
             return
 
         new_phrase = [
-            f'        <phrase id="{new_phrase_id}">\n',
-            f'            <text>{locale_key}</text>\n',
-            f'        </phrase>\n'
+            f'      <phrase id="{new_phrase_id}">\n',
+            f'          <text>{locale_key}</text>\n',
+            f'      </phrase>\n'
         ]
 
         lines[insert_index:insert_index] = new_phrase

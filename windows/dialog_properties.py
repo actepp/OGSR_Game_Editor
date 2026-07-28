@@ -652,8 +652,9 @@ class DialogProperties(QDialog):
             msg.setText(f"Диалог с именем '{new_id}' уже существует.")
             msg.setInformativeText("Введите другое имя.")
             msg.exec()
-            return  # ← ВАЖНО: просто выходим, окно свойств остаётся открытым
+            return
 
+        # --- Переименование диалога ---
         if new_id != old_id:
             print(f"[RENAME] {old_id} → {new_id}")
             self.rename_dialog_id(old_id, new_id)
@@ -664,21 +665,16 @@ class DialogProperties(QDialog):
             if entry:
                 self.xml_path = entry["xml_path"]
 
-        # --- Имя первой фразы под текущее имя диалога ---
+        # --- Пересчёт первой фразы ---
         base = self.dialog_id
 
         if self.dialog_data.get("phrase_list"):
-            used = set()
-            if getattr(loader, "text_loader", None):
-                used.update(loader.text_loader.localization.keys())
-
             idx = 0
-            while True:
-                candidate = f"{base}_{idx}"
-                if candidate not in used:
-                    self.dialog_data["phrase_list"][0]["text"] = candidate
-                    break
-                idx += 1
+            phrase_id = f"{base}_{idx}"
+            locale_key = f"{phrase_id}_text"
+
+            self.dialog_data["phrase_list"][0]["id"] = phrase_id
+            self.dialog_data["phrase_list"][0]["text"] = locale_key
 
         dialog_id = self.dialog_id
 
@@ -686,23 +682,17 @@ class DialogProperties(QDialog):
         #   СОХРАНЕНИЕ НОВОГО ДИАЛОГА
         # ============================================================
         if self.is_new:
-            # 1. Записываем новый диалог в constructor_dialogs.xml
             self.append_dialog_to_constructor_file()
-
-            # 2. Перезагружаем все диалоги
             loader._load_dialogs()
 
-            # 3. Находим путь к XML нового диалога
             dialog_entry = loader.dialogs.get(dialog_id)
             if dialog_entry:
                 xml_path = dialog_entry["xml_path"]
 
-                # 4. Вставляем свойства (new_rows)
                 try:
                     with open(xml_path, "r", encoding="cp1251", errors="ignore") as f:
                         lines = f.readlines()
 
-                    # ищем <dialog id="...">
                     start = None
                     pattern = re.compile(r'<dialog\b[^>]*\bid="' + re.escape(dialog_id) + r'"')
                     for i, line in enumerate(lines):
@@ -711,14 +701,12 @@ class DialogProperties(QDialog):
                             break
 
                     if start is not None and self.new_rows:
-                        # определяем отступ
                         if start + 1 < len(lines):
                             indent_match = re.match(r'^(\s*)', lines[start + 1])
                         else:
                             indent_match = re.match(r'^(\s*)', lines[start])
                         indent = indent_match.group(1) if indent_match else "    "
 
-                        # формируем строки свойств
                         new_lines = []
                         for row in self.new_rows:
                             combo = row["combo"]
@@ -734,25 +722,78 @@ class DialogProperties(QDialog):
 
                             new_lines.append(f"{indent}<{xml_tag}>{param_value}</{xml_tag}>\n")
 
-                        # вставляем сразу после <dialog ...>
                         insert_pos = start + 1
                         lines[insert_pos:insert_pos] = new_lines
 
-                        # сохраняем
                         with open(xml_path, "w", encoding="cp1251", errors="ignore") as f:
                             f.writelines(lines)
 
                 except Exception as e:
                     print(f"[ERROR] Cannot insert properties into new dialog: {e}")
 
-            # 5. Обновляем список диалогов в GUI
             mw.dialog_constructor.load_dialogs()
-
-            # 6. Очистка
             EDIT_BUFFER.clear()
             self.new_rows.clear()
             self.close()
             return
+
+        # ============================================================
+        #   СОХРАНЕНИЕ СТАРОГО ДИАЛОГА
+        # ============================================================
+        loader.save_dialog(dialog_id, self.dialog_data)
+
+        # --- Вставка новых строк (preconditions, has_info, etc.) ---
+        try:
+            with open(self.xml_path, "r", encoding="cp1251", errors="ignore") as f:
+                lines = f.readlines()
+        except Exception:
+            EDIT_BUFFER.clear()
+            self.close()
+            return
+
+        dialog_start_idx = None
+        pattern = re.compile(r'<dialog\b[^>]*\bid="' + re.escape(dialog_id) + r'"')
+
+        for i, line in enumerate(lines):
+            if pattern.search(line):
+                dialog_start_idx = i
+                break
+
+        if dialog_start_idx is not None and self.new_rows:
+            if dialog_start_idx + 1 < len(lines):
+                indent_match = re.match(r'^(\s*)', lines[dialog_start_idx + 1])
+            else:
+                indent_match = re.match(r'^(\s*)', lines[dialog_start_idx])
+
+            indent = indent_match.group(1) if indent_match else "    "
+
+            new_lines = []
+            for row in self.new_rows:
+                combo = row["combo"]
+                label = row["label"]
+                gui_tag = combo.currentText()
+                xml_tag = TAG_MAP.get(gui_tag)
+                if xml_tag is None:
+                    continue
+
+                param_value = label.text().strip()
+                if not param_value:
+                    continue
+
+                new_lines.append(f"{indent}<{xml_tag}>{param_value}</{xml_tag}>\n")
+
+            insert_pos = dialog_start_idx + 1
+            lines[insert_pos:insert_pos] = new_lines
+
+            try:
+                with open(self.xml_path, "w", encoding="cp1251", errors="ignore") as f:
+                    f.writelines(lines)
+            except Exception:
+                pass
+
+        EDIT_BUFFER.clear()
+        self.new_rows.clear()
+        self.close()
 
         # ============================================================
         #   СОХРАНЕНИЕ СТАРОГО ДИАЛОГА
@@ -935,54 +976,6 @@ class DialogProperties(QDialog):
         #   СОЗДАНИЕ / ОБНОВЛЕНИЕ ФАЙЛА ЛОКАЛЕЙ (ручная запись)
         # ============================================================
 
-        phrase_id = self.dialog_data["phrase_list"][0]["text"]
-
-        text_root = loader.paths["configs/text"]
-        dialogs_dir = os.path.join(text_root, "dialogs")
-        os.makedirs(dialogs_dir, exist_ok=True)
-
-        locale_file = os.path.join(dialogs_dir, "stable_dialogs_dialog_constructor.xml")
-
-        # если файла нет — создаём пустой
-        if not os.path.exists(locale_file):
-            with open(locale_file, "w", encoding="windows-1251") as f:
-                f.write('<?xml version="1.0" encoding="windows-1251"?>\n<string_table>\n</string_table>')
-
-        # читаем как текст
-        with open(locale_file, "r", encoding="windows-1251") as f:
-            lines = f.readlines()
-
-        # проверяем наличие строки
-        tag = f'<string id="{phrase_id}">'
-        if any(tag in line for line in lines):
-            loader._load_dialogs()
-            return  # уже есть
-
-        # формируем блок вручную
-        new_block = (
-            f'    <string id="{phrase_id}">\n'
-            f'        <rus></rus>\n'
-            f'        <eng></eng>\n'
-            f'    </string>\n'
-        )
-
-        # ищем позицию </string_table>
-        end_idx = None
-        for i, line in enumerate(lines):
-            if "</string_table>" in line:
-                end_idx = i
-                break
-
-        if end_idx is None:
-            print("[ERROR] Не найден </string_table>")
-            return
-
-        # вставляем
-        lines.insert(end_idx, new_block)
-
-        # сохраняем
-        with open(locale_file, "w", encoding="windows-1251") as f:
-            f.writelines(lines)
 
         # ============================================================
         #   Перезагрузка диалогов
