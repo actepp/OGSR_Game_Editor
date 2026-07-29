@@ -5,7 +5,8 @@ import xml.etree.ElementTree as ET
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QPushButton,
     QHBoxLayout, QGridLayout, QFrame, QLineEdit,
-    QWidget, QSizePolicy, QComboBox, QMessageBox
+    QWidget, QSizePolicy, QComboBox, QMessageBox, 
+    QProgressBar, QApplication
 )
 from PyQt6.QtCore import Qt, QObject, QEvent
 
@@ -34,6 +35,30 @@ def make_vline():
     line.setStyleSheet("color: #444;")
     return line
 
+class DialogReloadProgress(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setWindowTitle("Обновление диалогов")
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self.setFixedSize(260, 80)
+
+        layout = QVBoxLayout(self)
+
+        label = QLabel("Перезагрузка диалогов...")
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(label)
+
+        bar = QProgressBar()
+        bar.setRange(0, 0)  # бесконечный индикатор
+        layout.addWidget(bar)
+
+    def center_on_parent(self):
+        if self.parent():
+            p = self.parent().geometry()
+            x = p.x() + (p.width() - self.width()) // 2
+            y = p.y() + (p.height() - self.height()) // 2
+            self.move(x, y)
 
 class EditLine(QLineEdit):
     def __init__(self, text, dialog, label):
@@ -683,7 +708,13 @@ class DialogProperties(QDialog):
         # ============================================================
         if self.is_new:
             self.append_dialog_to_constructor_file()
+            # --- показываем прогресс ---
+            dlg_prog = DialogReloadProgress(self)
+            dlg_prog.center_on_parent()
+            dlg_prog.show()
+            QApplication.processEvents()
             loader._load_dialogs()
+            dlg_prog.close()
 
             dialog_entry = loader.dialogs.get(dialog_id)
             if dialog_entry:
