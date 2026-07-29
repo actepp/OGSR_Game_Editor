@@ -1339,7 +1339,7 @@ class InfiniteGridWidget(QWidget):
         self.update()
 
     def delete_phrase(self, node: DialogNode):
-        import re
+        import re, os
 
         dialog_id = node.dialog_id.split(":")[0]
         phrase_id = str(node.logic_id)
@@ -1352,17 +1352,15 @@ class InfiniteGridWidget(QWidget):
         loader = mw.res_loader
         xml_path = loader.dialogs[dialog_id]["xml_path"]
 
-        # читаем файл
+        # читаем файл диалога
         try:
-            with open(xml_path, "r", encoding="utf-8") as f:
+            with open(xml_path, "r", encoding="utf-8", errors="ignore") as f:
                 lines = f.readlines()
         except Exception as e:
             print("[delete_phrase] Cannot read XML:", e)
             return
 
-        # --------------------------------------------------------
-        #   1) Найти границы <dialog id="..."> ... </dialog>
-        # --------------------------------------------------------
+        # 1) найти границы <dialog id="..."> ... </dialog>
         dialog_start = None
         dialog_end = None
 
@@ -1385,9 +1383,7 @@ class InfiniteGridWidget(QWidget):
             print("[delete_phrase] dialog end not found")
             return
 
-        # --------------------------------------------------------
-        #   2) Найти <phrase id="X"> ... </phrase> внутри диалога
-        # --------------------------------------------------------
+        # 2) найти <phrase id="X"> ... </phrase> внутри диалога
         start = None
         end = None
 
@@ -1410,38 +1406,43 @@ class InfiniteGridWidget(QWidget):
             print("[delete_phrase] phrase end not found")
             return
 
-        # --------------------------------------------------------
-        #   3) Удалить саму фразу
-        # --------------------------------------------------------
+        # 2.5) вытащить ИМЯ ЛОКАЛИ из <text>...</text> внутри этой фразы
+        locale_key = None
+        for i in range(start, end + 1):
+            line = lines[i]
+            if "<text>" in line and "</text>" in line:
+                before, _, rest = line.partition("<text>")
+                text_content, _, _ = rest.partition("</text>")
+                locale_key = text_content.strip()
+                print(f"[delete_phrase] Extracted locale_key from phrase: '{locale_key}'")
+                break
+
+        if not locale_key:
+            print("[delete_phrase] No <text>...</text> found in phrase block, locale will not be removed")
+
+        # 3) удалить саму фразу из диалога
         new_dialog_block = []
         for i in range(dialog_start, dialog_end + 1):
             if not (start <= i <= end):
                 new_dialog_block.append(lines[i])
 
-        # --------------------------------------------------------
-        #   4) Удалить только внутри диалога все <next>X</next>
-        # --------------------------------------------------------
+        # 4) удалить все <next>7</next> внутри диалога
         old_next = f"<next>{phrase_id}</next>"
-
         cleaned_dialog_block = []
         for line in new_dialog_block:
             if old_next not in line:
                 cleaned_dialog_block.append(line)
 
-        # --------------------------------------------------------
-        #   5) Собрать новый файл
-        # --------------------------------------------------------
+        # 5) собрать новый файл диалога
         new_lines = (
             lines[:dialog_start] +
             cleaned_dialog_block +
             lines[dialog_end + 1:]
         )
 
-        # --------------------------------------------------------
-        #   6) Записать файл
-        # --------------------------------------------------------
+        # 6) записать диалог
         try:
-            with open(xml_path, "w", encoding="utf-8") as f:
+            with open(xml_path, "w", encoding="utf-8", errors="ignore") as f:
                 f.writelines(new_lines)
         except Exception as e:
             print("[delete_phrase] Cannot write XML:", e)
@@ -1450,13 +1451,75 @@ class InfiniteGridWidget(QWidget):
         print(f"[delete_phrase] Phrase {phrase_id} deleted from dialog {dialog_id}")
 
         # --------------------------------------------------------
-        #   7) Перезагрузить диалог
+        #   7) Удалить локаль фразы из всех файлов локалей
         # --------------------------------------------------------
-        loader.reload_dialog(dialog_id)
+        try:
+            if not locale_key:
+                print("[delete_phrase] locale_key is None, skip locale removal")
+            else:
+                text_root = loader.paths["configs/text"]
+                dialogs_dir = os.path.join(text_root, "dialogs")
 
-        # --------------------------------------------------------
-        #   8) Перерисовать граф
-        # --------------------------------------------------------
+                # перебираем ВСЕ xml в configs/text/dialogs/
+                for fname in os.listdir(dialogs_dir):
+                    if not fname.lower().endswith(".xml"):
+                        continue
+
+                    fpath = os.path.join(dialogs_dir, fname)
+
+                    try:
+                        with open(fpath, "r", encoding="windows-1251", errors="ignore") as f:
+                            loc_lines = f.readlines()
+                    except Exception as e:
+                        print(f"[delete_phrase] Cannot read locale file {fpath}: {e}")
+                        continue
+
+                    tag = f'<string id="{locale_key}"'
+                    start_loc = None
+                    end_loc = None
+
+                    # ищем <string id="locale_key">
+                    for i, line in enumerate(loc_lines):
+                        if tag in line:
+                            start_loc = i
+                            break
+
+                    if start_loc is None:
+                        continue  # в этом файле нет локали
+
+                    # ищем </string>
+                    for i in range(start_loc + 1, len(loc_lines)):
+                        if "</string>" in loc_lines[i]:
+                            end_loc = i
+                            break
+
+                    if end_loc is None:
+                        print(f"[delete_phrase] Found start but no end for locale '{locale_key}' in {fpath}")
+                        continue
+
+                    print(f"[delete_phrase] Removing locale '{locale_key}' from {fpath}")
+
+                    # удаляем блок
+                    new_loc_lines = []
+                    for i, line in enumerate(loc_lines):
+                        if not (start_loc <= i <= end_loc):
+                            new_loc_lines.append(line)
+
+                    try:
+                        with open(fpath, "w", encoding="windows-1251", errors="ignore") as f:
+                            f.writelines(new_loc_lines)
+                    except Exception as e:
+                        print(f"[delete_phrase] Cannot write locale file {fpath}: {e}")
+                        continue
+
+                    print(f"[delete_phrase] Locale '{locale_key}' removed from {fpath}")
+
+        except Exception as e:
+            print("[delete_phrase] Cannot remove locale:", e)
+
+
+        # 8) перезагрузить диалог и перерисовать граф
+        loader.reload_dialog(dialog_id)
         dialog_data = loader.get_dialog(dialog_id)
         xml_root = dialog_data["xml_node"]
 
@@ -1464,7 +1527,6 @@ class InfiniteGridWidget(QWidget):
         graph = logic.build_graph(xml_root)
 
         self.spawn_graph(graph)
-
 
     def add_phrase_after(self, node: DialogNode):
         mw = self.find_main_window()
