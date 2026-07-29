@@ -707,7 +707,7 @@ class DialogProperties(QDialog):
         #   СОХРАНЕНИЕ НОВОГО ДИАЛОГА
         # ============================================================
         if self.is_new:
-            self.append_dialog_to_constructor_file()
+            
             # --- показываем прогресс ---
             dlg_prog = DialogReloadProgress(self)
             dlg_prog.center_on_parent()
@@ -716,6 +716,7 @@ class DialogProperties(QDialog):
             loader._load_dialogs()
             dlg_prog.close()
 
+            self.append_dialog_to_constructor_file()
             dialog_entry = loader.dialogs.get(dialog_id)
             if dialog_entry:
                 xml_path = dialog_entry["xml_path"]
