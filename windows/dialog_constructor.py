@@ -1636,9 +1636,9 @@ class InfiniteGridWidget(QWidget):
                 insert_pos = i + 1
 
         if insert_pos is not None:
-            lines.insert(insert_pos, f"            {new_next}\n")
+            lines.insert(insert_pos, f"        {new_next}\n")
         else:
-            lines.insert(end, f"            {new_next}\n")
+            lines.insert(end, f"        {new_next}\n")
 
         # ------------------------------------------------------------
         #   СОХРАНЯЕМ XML
