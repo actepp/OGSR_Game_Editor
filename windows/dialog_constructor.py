@@ -120,7 +120,7 @@ class InfiniteGridWidget(QWidget):
         self.base_grid_step = 50.0
 
         # Состояние пинч-жеста (масштабирование двумя пальцами на тачпаде).
-        self._pinch_active = False
+        self._pinch_center: QPointF | None = None
         self._pinch_scale = 1.0
         self.grabGesture(Qt.GestureType.PinchGesture)
 
@@ -1785,17 +1785,22 @@ class InfiniteGridWidget(QWidget):
 
     def _handle_pinch(self, pinch):
         state = pinch.state()
-
-        if state in (Qt.GestureState.GestureStarted, Qt.GestureState.GestureUpdated):
-            self._pinch_active = True
-        elif state in (Qt.GestureState.GestureFinished, Qt.GestureState.GestureCanceled):
-            print("[PINCH] end")
-            self._pinch_active = False
-            self._pinch_scale = 1.0
-            return
+        center = pinch.centerPoint()
 
         if state == Qt.GestureState.GestureStarted:
             self._pinch_scale = 1.0
+            self._pinch_center = center
+        else:
+            # Сдвиг центра пальцев — это панорамирование, оно идёт одновременно
+            # с изменением масштаба, а не вместо него.
+            if self._pinch_center is not None:
+                dx = center.x() - self._pinch_center.x()
+                dy = center.y() - self._pinch_center.y()
+                if dx or dy:
+                    self.offset_x += dx
+                    self.offset_y += dy
+                    self.update()
+            self._pinch_center = center
 
         # scaleFactor() — инкрементальный множитель относительно прошлого события:
         # > 1 — пальцы разведены (приближение), < 1 — сведены (отдаление).
@@ -1803,8 +1808,13 @@ class InfiniteGridWidget(QWidget):
             factor = pinch.scaleFactor()
             if factor > 0 and abs(factor - 1.0) > 1e-12:
                 self._pinch_scale *= factor
-                print(f"[PINCH] factor={factor:.4f} total={self._pinch_scale:.4f}")
-                self._apply_zoom_factor(factor, pinch.centerPoint().toPoint())
+                print(f"[PINCH] pan+zoom factor={factor:.4f} total={self._pinch_scale:.4f}")
+                self._apply_zoom_factor(factor, center.toPoint())
+
+        if state in (Qt.GestureState.GestureFinished, Qt.GestureState.GestureCanceled):
+            print("[PINCH] end")
+            self._pinch_scale = 1.0
+            self._pinch_center = None
 
     def wheelEvent(self, event):
         pixel_delta = event.pixelDelta()
@@ -1814,7 +1824,7 @@ class InfiniteGridWidget(QWidget):
         # workspace it is far more useful to treat it as a canvas pan —
         # exactly like grabbing the world with the left mouse button.
         if not pixel_delta.isNull():
-            if event.modifiers() & Qt.KeyboardModifier.ControlModifier and not self._pinch_active:
+            if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
                 # Ctrl + два пальца (пинч) → зум. macOS для пинча часто присылает
                 # событие с pixelDelta, но пустым angleDelta, поэтому берём то,
                 # что реально пришло, и масштабируем мультипликативно.
