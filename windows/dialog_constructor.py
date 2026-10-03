@@ -1,13 +1,12 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QListWidget, QLineEdit, QSplitter, QMenu, QApplication
+    QListWidget, QLineEdit, QSplitter, QMenu, QApplication, QPinchGesture
 )
 from PyQt6.QtGui import QAction, QPainter, QPen, QColor, QFont
-from PyQt6.QtCore import Qt, QPoint, QRectF, QRect
+from PyQt6.QtCore import Qt, QPoint, QPointF, QRectF, QRect, QEvent
 from windows.dialog_properties import DialogProperties
 from windows.dialog_node_logic import DialogNodeLogic
 from PyQt6.QtGui import QTextLayout, QTextOption
-from PyQt6.QtCore import QPointF, QEvent
 import os
 import re
 from windows.phrase_properties import PhraseProperties
@@ -119,6 +118,11 @@ class InfiniteGridWidget(QWidget):
 
         self._last_mouse_pos: QPoint | None = None
         self.base_grid_step = 50.0
+
+        # Состояние пинч-жеста (масштабирование двумя пальцами на тачпаде).
+        self._pinch_active = False
+        self._pinch_scale = 1.0
+        self.grabGesture(Qt.GestureType.PinchGesture)
 
         self.nodes: list[DialogNode] = []
         self.active_node: DialogNode | None = None
@@ -1737,11 +1741,17 @@ class InfiniteGridWidget(QWidget):
     # --------------------------------------------------------
     #   Зум
     # --------------------------------------------------------
-    def _zoom_at(self, delta, cursor_pos):
-        zoom_factor = 1.0 + (delta / 1200.0)
+    def _apply_zoom_factor(self, factor, cursor_pos):
+        """
+        Изменить масштаб в factor раз, удерживая точку cursor_pos на месте.
+        """
+        if factor <= 0:
+            return
 
-        new_scale = self.scale * zoom_factor
-        new_scale = max(0.0001, min(new_scale, 1000))
+        new_scale = max(0.0001, min(self.scale * factor, 1000.0))
+
+        if abs(new_scale - self.scale) < 1e-12:
+            return
 
         cx = cursor_pos.x()
         cy = cursor_pos.y()
@@ -1756,6 +1766,46 @@ class InfiniteGridWidget(QWidget):
 
         self.update()
 
+    def _zoom_at(self, delta, cursor_pos):
+        self._apply_zoom_factor(1.0 + (delta / 1200.0), cursor_pos)
+
+    # --------------------------------------------------------
+    #   Пинч (масштабирование двумя пальцами на тачпаде)
+    # --------------------------------------------------------
+    def event(self, e):
+        # PyQt6 не отдаёт QWidget::gestureEvent в Python, поэтому перехватываем
+        # жесты здесь: пинч с тачпада приходит как QGestureEvent с QPinchGesture.
+        if e.type() == QEvent.Type.Gesture:
+            pinch = e.gesture(Qt.GestureType.PinchGesture)
+            if pinch is not None:
+                self._handle_pinch(pinch)
+                e.accept()
+                return True
+        return super().event(e)
+
+    def _handle_pinch(self, pinch):
+        state = pinch.state()
+
+        if state in (Qt.GestureState.GestureStarted, Qt.GestureState.GestureUpdated):
+            self._pinch_active = True
+        elif state in (Qt.GestureState.GestureFinished, Qt.GestureState.GestureCanceled):
+            print("[PINCH] end")
+            self._pinch_active = False
+            self._pinch_scale = 1.0
+            return
+
+        if state == Qt.GestureState.GestureStarted:
+            self._pinch_scale = 1.0
+
+        # scaleFactor() — инкрементальный множитель относительно прошлого события:
+        # > 1 — пальцы разведены (приближение), < 1 — сведены (отдаление).
+        if pinch.changeFlags() & QPinchGesture.ChangeFlag.ScaleFactorChanged:
+            factor = pinch.scaleFactor()
+            if factor > 0 and abs(factor - 1.0) > 1e-12:
+                self._pinch_scale *= factor
+                print(f"[PINCH] factor={factor:.4f} total={self._pinch_scale:.4f}")
+                self._apply_zoom_factor(factor, pinch.centerPoint().toPoint())
+
     def wheelEvent(self, event):
         pixel_delta = event.pixelDelta()
 
@@ -1764,11 +1814,17 @@ class InfiniteGridWidget(QWidget):
         # workspace it is far more useful to treat it as a canvas pan —
         # exactly like grabbing the world with the left mouse button.
         if not pixel_delta.isNull():
-            if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
-                # Ctrl + two-finger drag → zoom (keeps zoom reachable)
-                delta = event.angleDelta().y()
-                if delta != 0:
-                    self._zoom_at(delta, event.position())
+            if event.modifiers() & Qt.KeyboardModifier.ControlModifier and not self._pinch_active:
+                # Ctrl + два пальца (пинч) → зум. macOS для пинча часто присылает
+                # событие с pixelDelta, но пустым angleDelta, поэтому берём то,
+                # что реально пришло, и масштабируем мультипликативно.
+                delta = event.angleDelta().y() or pixel_delta.y()
+                if delta:
+                    if event.angleDelta().y():
+                        self._zoom_at(delta, event.position())
+                    else:
+                        factor = max(0.5, min(1.0 + (delta / 100.0), 2.0))
+                        self._apply_zoom_factor(factor, event.position())
             else:
                 # Plain two-finger drag → pan the workspace
                 print("[PAN] Trackpad two-finger drag")
