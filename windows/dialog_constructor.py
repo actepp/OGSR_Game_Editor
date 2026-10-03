@@ -1737,14 +1737,12 @@ class InfiniteGridWidget(QWidget):
     # --------------------------------------------------------
     #   Зум
     # --------------------------------------------------------
-    def wheelEvent(self, event):
-        delta = event.angleDelta().y()
+    def _zoom_at(self, delta, cursor_pos):
         zoom_factor = 1.0 + (delta / 1200.0)
 
         new_scale = self.scale * zoom_factor
         new_scale = max(0.0001, min(new_scale, 1000))
 
-        cursor_pos = event.position()
         cx = cursor_pos.x()
         cy = cursor_pos.y()
 
@@ -1757,6 +1755,35 @@ class InfiniteGridWidget(QWidget):
         self.offset_y = cy - world_y_before * self.scale
 
         self.update()
+
+    def wheelEvent(self, event):
+        pixel_delta = event.pixelDelta()
+
+        # High-resolution scrolling (macOS trackpad two-finger gesture).
+        # The native behaviour here is a "scroll", but for an infinite
+        # workspace it is far more useful to treat it as a canvas pan —
+        # exactly like grabbing the world with the left mouse button.
+        if not pixel_delta.isNull():
+            if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+                # Ctrl + two-finger drag → zoom (keeps zoom reachable)
+                delta = event.angleDelta().y()
+                if delta != 0:
+                    self._zoom_at(delta, event.position())
+            else:
+                # Plain two-finger drag → pan the workspace
+                print("[PAN] Trackpad two-finger drag")
+                self.offset_x += pixel_delta.x()
+                self.offset_y += pixel_delta.y()
+                self.update()
+            event.accept()
+            return
+
+        # Discrete mouse-wheel scroll → zoom (unchanged behaviour)
+        delta = event.angleDelta().y()
+        if delta != 0:
+            self._zoom_at(delta, event.position())
+        event.accept()
+
     def keyPressEvent(self, event):
         # Ctrl+Z → Undo
         if event.key() == Qt.Key.Key_Z and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
