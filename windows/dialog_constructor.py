@@ -12,7 +12,11 @@ import re
 from windows.phrase_properties import PhraseProperties
 import xml.etree.ElementTree as ET
 
-AVAILABLE_LOCALES = ["rus", "eng"]
+AVAILABLE_LOCALES = ["rus", "eng", "tur", "ukr"]
+
+LOCALE_POPUP_WIDTH = 80
+LOCALE_POPUP_ITEM_HEIGHT = 22
+LOCALE_POPUP_GAP = 4
 
 # ============================================================
 #   Узел диалога (квадратик)
@@ -639,40 +643,6 @@ class InfiniteGridWidget(QWidget):
             )
 
             # ------------------------------------------------
-            #   ВЫПАДАЮЩИЙ СПИСОК ЛОКАЛЕЙ
-            # ------------------------------------------------
-            if node.locale_open:
-                box_w = 80 * self.scale
-                box_h = len(AVAILABLE_LOCALES) * (22 * self.scale)
-
-                box_x = loc_sx
-                box_y = loc_sy + loc_sh + 4
-
-                painter.setBrush(QColor(50, 50, 50))
-                painter.setPen(QPen(QColor(120, 120, 120)))
-                painter.drawRect(int(box_x), int(box_y), int(box_w), int(box_h))
-
-                for i, lang in enumerate(AVAILABLE_LOCALES):
-                    item_y = box_y + i * (22 * self.scale)
-
-                    painter.setPen(QPen(QColor(220, 220, 220)))
-
-                    app_font = self.get_app_font()
-                    font = QFont(app_font.family(), self.smart_font_size(app_font.pointSize()))
-                    painter.setFont(font)
-
-                    painter.drawText(
-                        QRect(
-                            int(box_x),
-                            int(item_y),
-                            int(box_w),
-                            int(22 * self.scale)
-                        ),
-                        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                        f"  {lang.upper()}"
-                    )
-
-            # ------------------------------------------------
             #   Треугольник ресайза
             # ------------------------------------------------
             tri_size = 12 * self.scale
@@ -692,6 +662,67 @@ class InfiniteGridWidget(QWidget):
                 target = self.find_node_by_phrase_id(nxt)
                 if target:
                     self.draw_link(painter, node, target)
+
+        # ----------------------------------------------------
+        #   ВЫПАДАЮЩИЕ СПИСКИ ЛОКАЛЕЙ
+        #   Рисуем ПОСЛЕ всех узлов, чтобы список всегда был
+        #   поверх графа и не просвечивал сквозь соседние ноды
+        # ----------------------------------------------------
+        for node in self.nodes:
+            if not node.locale_open:
+                continue
+
+            self.draw_locale_popup(painter, node)
+
+    def draw_locale_popup(self, painter, node):
+        popup = self.locale_popup_rect(node)
+
+        box_sx = int(popup.x() * self.scale + self.offset_x)
+        box_sy = int(popup.y() * self.scale + self.offset_y)
+        box_sw = int(popup.width() * self.scale)
+        box_sh = int(popup.height() * self.scale)
+
+        item_h = popup.height() / len(AVAILABLE_LOCALES)
+
+        # непрозрачная подложка
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(45, 45, 45))
+        painter.drawRect(box_sx, box_sy, box_sw, box_sh)
+
+        app_font = self.get_app_font()
+        font = QFont(app_font.family(), self.smart_font_size(app_font.pointSize()))
+        painter.setFont(font)
+
+        for i, lang in enumerate(AVAILABLE_LOCALES):
+            item_sy = int((popup.y() + i * item_h) * self.scale + self.offset_y)
+            item_sh = int(item_h * self.scale)
+
+            # подсветка активной локали
+            if lang == node.locale:
+                painter.setBrush(QColor(70, 70, 120))
+                painter.drawRect(box_sx, item_sy, box_sw, item_sh)
+
+            painter.setPen(QPen(QColor(230, 230, 230)))
+            painter.drawText(
+                QRect(box_sx, item_sy, box_sw, item_sh),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                f"  {lang.upper()}"
+            )
+
+        # рамка поверх заливки пунктов
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(QColor(140, 140, 140)))
+        painter.drawRect(box_sx, box_sy, box_sw, box_sh)
+
+    def locale_popup_rect(self, node):
+        """Прямоугольник выпадающего списка локалей в мировых координатах."""
+        button = node.locale_button_rect()
+        return QRectF(
+            button.x(),
+            button.y() + button.height() + LOCALE_POPUP_GAP,
+            LOCALE_POPUP_WIDTH,
+            LOCALE_POPUP_ITEM_HEIGHT * len(AVAILABLE_LOCALES)
+        )
 
     def finish_editing(self, node, save=False):
         new_text = node.editor.toPlainText().strip()
@@ -790,6 +821,30 @@ class InfiniteGridWidget(QWidget):
                 self.finish_editing(n, save=False)
                 break
 
+        # --- клик по открытому списку локалей ---
+        # Список нарисован поверх всех нод, поэтому проверяем его первым
+        for node in reversed(self.nodes):
+            if not node.locale_open:
+                continue
+
+            popup = self.locale_popup_rect(node)
+            if not popup.contains(wx, wy):
+                continue
+
+            print(f"[PRESS] Locale list click on {node.dialog_id}:{node.logic_id}")
+
+            index = int((wy - popup.y()) // LOCALE_POPUP_ITEM_HEIGHT)
+            if 0 <= index < len(AVAILABLE_LOCALES):
+                node.locale = AVAILABLE_LOCALES[index]
+
+                logic = DialogNodeLogic(self.constructor.parent().res_loader.paths["configs/text"])
+                new_text = logic.resolve_text(node.text_key, node.locale)
+                node.logic_text_real = new_text if new_text.strip() else "NONE"
+
+            node.locale_open = False
+            self.update()
+            return
+
         # ВАЖНО: идём по нодам от ПЕРЕДНЕГО плана к ЗАДНЕМУ
         for node in reversed(self.nodes):
 
@@ -848,26 +903,6 @@ class InfiniteGridWidget(QWidget):
 
             # ================= список локалей =================
             if node.locale_open:
-                loc = node.locale_button_rect()
-                box_x = loc.x()
-                box_y = loc.y() + node.locale_button_size + 4
-                box_w = 80
-                box_h = len(AVAILABLE_LOCALES) * 22
-
-                if QRectF(box_x, box_y, box_w, box_h).contains(wx, wy):
-                    print(f"[PRESS] Locale list click on {node.dialog_id}:{node.logic_id}")
-                    index = int((wy - box_y) // 22)
-                    if 0 <= index < len(AVAILABLE_LOCALES):
-                        node.locale = AVAILABLE_LOCALES[index]
-
-                        logic = DialogNodeLogic(self.constructor.parent().res_loader.paths["configs/text"])
-                        new_text = logic.resolve_text(node.text_key, node.locale)
-                        node.logic_text_real = new_text if new_text.strip() else "NONE"
-
-                    node.locale_open = False
-                    self.update()
-                    return
-
                 print("[PRESS] Click outside locale list → closing list")
                 node.locale_open = False
                 self.update()
