@@ -227,35 +227,44 @@ class PhraseProperties(QDialog):
         if xml_tag not in ("action", "precondition"):
             edit.setStyleSheet("color: white; background-color: #202020; padding-left: 10px;")
             label.setStyleSheet("color: #ccc; padding-left: 10px;")
+            label.setToolTip("")
+            edit.setToolTip("")
             return
 
         if not text:
             color = "white"
             label_color = "#ccc"
+            tooltip = ""
         else:
             if not self._validate_syntax(text):
                 color = "#ff5252"
                 label_color = "#ff5252"
+                tooltip = "Ошибка синтаксиса: проверьте пробелы и кавычки (допустимы только одинарные)"
             else:
                 func_name, arg_count = self._parse_function_call(text)
 
-                if func_name in loader.lua_functions:
+                if func_name not in loader.lua_functions:
+                    color = "#ff5252"
+                    label_color = "#ff5252"
+                    tooltip = "Функция не найдена: проверьте правильность написания файла/функции"
+                else:
                     param_info = loader.lua_functions_params.get(func_name, {})
                     has_varargs = param_info.get("has_varargs", False)
                     param_count = param_info.get("count", 0)
 
-                    if has_varargs or arg_count <= param_count:
-                        color = "#a5d6a7"
-                        label_color = "#a5d6a7"
-                    else:
+                    if not has_varargs and arg_count > param_count:
                         color = "#ff5252"
                         label_color = "#ff5252"
-                else:
-                    color = "#ff5252"
-                    label_color = "#ff5252"
+                        tooltip = f"Превышено количество аргументов: функция ожидает {param_count}, передано {arg_count}"
+                    else:
+                        color = "#a5d6a7"
+                        label_color = "#a5d6a7"
+                        tooltip = ""
 
         edit.setStyleSheet(f"color: {color}; background-color: #202020; padding-left: 10px;")
         label.setStyleSheet(f"color: {label_color}; padding-left: 10px;")
+        label.setToolTip(tooltip)
+        edit.setToolTip(tooltip)
         self._update_save_button()
 
     def _has_errors(self):
