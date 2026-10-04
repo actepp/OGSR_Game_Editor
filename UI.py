@@ -209,22 +209,22 @@ class WelcomeDialog(QDialog):
 
         save_settings(final_settings)
 
-        # ВАЖНО: вызвать перезагрузку ресурсов у главного окна
-        if self.parent() and hasattr(self.parent(), "reload_resources"):
-            self.parent().settings = final_settings
-            self.parent().reload_resources()
+        # ВАЖНО: главное окно должно сразу перечитать ресурсы,
+        # иначе диалоги появятся только после перезапуска программы
+        main_window = self.find_main_window()
+        if main_window is not None:
+            main_window.settings = final_settings
+            main_window.reload_resources(final_settings)
 
         self.accept()
 
-    def reload_resources(self):
-        """Перезагрузка ресурсов после мастера настройки."""
-        self.res_loader = ResourceLoader(self.settings)
-
-        if not self.res_loader.is_ready():
-            print("ResourceLoader: пути невалидны, ресурсы не загружены")
-        else:
-            print("ResourceLoader: ресурсы успешно загружены")
-
+    def find_main_window(self):
+        widget = self.parent()
+        while widget is not None:
+            if hasattr(widget, "reload_resources"):
+                return widget
+            widget = widget.parent()
+        return None
 
     def next_step(self):
         self.current_step += 1
@@ -243,6 +243,8 @@ class MainWindow(QMainWindow):
         self.showMaximized()
         self.workspace_active = False
         self.settings = settings
+        self.res_loader = None
+        self._loader_generation = 0
         self.child_windows: list[QDialog] = []
         self.installEventFilter(self)
         self.init_menu()
@@ -315,6 +317,8 @@ class MainWindow(QMainWindow):
         action_light.triggered.connect(self.set_light_theme)
 
     def load_resources_with_progress(self):
+        self._loader_generation += 1
+        generation = self._loader_generation
 
         dlg = LoadingDialog(self)
         dlg.center_on_screen()
@@ -325,6 +329,14 @@ class MainWindow(QMainWindow):
 
         def on_finished(loader):
             dlg.close()
+
+            # Пока этот поток работал, пути могли смениться
+            # (мастер настройки или диалог «Настройки»).
+            # Устаревший результат больше не применяем.
+            if generation != self._loader_generation:
+                print("ResourceLoader: результат фоновой загрузки устарел — пропущен")
+                return
+
             self.res_loader = loader
             print("Ресурсы загружены.")
 
@@ -390,21 +402,55 @@ class MainWindow(QMainWindow):
 
 
     def open_dialog_constructor(self):
-        #self.reload_resources()  # ← ВАЖНО!
+        # Пути могли быть указаны только что (первый запуск / «Настройки») —
+        # убеждаемся, что ресурсы реально прочитаны, до создания конструктора
+        if (self.res_loader is None or not self.res_loader.is_ready()) \
+                and validate_settings_paths(self.settings):
+            self.reload_resources(self.settings)
+
         widget = DialogConstructor(self)
         self.setCentralWidget(widget)
         self.dialog_constructor = widget   # ← ВАЖНО: сохраняем ссылку
         self.workspace_active = True
         self.update_file_menu_state()
 
-    def reload_resources(self):
-        """Перезагрузка ресурсов после мастера настройки."""
+    def apply_paths(self, paths):
+        """Сохраняет пути и сразу перечитывает ресурсы (без перезапуска)."""
+        settings = load_settings()
+        settings["paths"] = paths
+        save_settings(settings)
+        self.reload_resources(settings)
+
+    def reload_resources(self, settings=None):
+        """Перезагрузка ресурсов после мастера настройки или диалога «Настройки»."""
+        if settings is not None:
+            self.settings = settings
+        else:
+            # пути могли измениться на диске — перечитываем
+            self.settings = load_settings()
+
+        # Помечаем текущую загрузку устаревшей, чтобы результат
+        # фонового потока её не перезаписал
+        self._loader_generation += 1
+
         self.res_loader = ResourceLoader(self.settings)
 
         if not self.res_loader.is_ready():
             print("ResourceLoader: пути невалидны, ресурсы не загружены")
         else:
-            print("ResourceLoader: ресурсы успешно загружены")
+            print(
+                f"ResourceLoader: ресурсы успешно загружены "
+                f"({len(self.res_loader.dialogs)} диалогов)"
+            )
+
+        self.refresh_open_tools()
+
+    def refresh_open_tools(self):
+        """Обновляет уже открытые инструменты под новый res_loader."""
+        widget = self.centralWidget()
+
+        if isinstance(widget, DialogConstructor):
+            widget.load_dialogs()
 
 
     def set_dark_theme(self):
@@ -479,6 +525,10 @@ def run_app():
 
         settings = load_settings()
         main_window.settings = settings
+
+        # мастер уже перечитал ресурсы — повторно грузим, только если не вышло
+        if main_window.res_loader is None or not main_window.res_loader.is_ready():
+            main_window.reload_resources(settings)
     else:
         settings = load_settings()
         main_window = MainWindow(settings)

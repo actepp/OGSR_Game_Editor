@@ -1987,14 +1987,20 @@ class DialogConstructor(QWidget):
     # --------------------------------------------------------
     def load_dialogs(self):
         loader = self.parent().res_loader
+
+        if loader is None:
+            print("[DialogConstructor] Ресурсы ещё не загружены — список диалогов пуст")
+            self.all_dialogs = []
+            self.dialog_list.clear()
+            return
+
         dialog_ids = loader.get_dialog_list()
         dialog_ids.sort()
 
         self.all_dialogs = dialog_ids
 
-        self.dialog_list.clear()
-        for d in dialog_ids:
-            self.dialog_list.addItem(d)
+        # через update_filter, чтобы сохранить активный поиск
+        self.update_filter(self.search_box.text())
 
     # --------------------------------------------------------
     #   Фильтр

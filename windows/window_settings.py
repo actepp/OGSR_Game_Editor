@@ -304,12 +304,29 @@ class SettingsDialog(QDialog):
             self.change_category(0)
 
     # ---------------------------------------------------------
-    # Сохранение путей
+    #   Сохранение путей
     # ---------------------------------------------------------
     def save_all(self):
         self.settings["paths"] = self.paths
         save_settings(self.settings)
+
+        # Сообщаем главному окну, что пути изменились, чтобы оно
+        # сразу перечитало ресурсы — иначе диалоги появятся
+        # только после перезапуска программы
+        main_window = self.find_main_window()
+        if main_window is not None:
+            main_window.apply_paths(self.paths)
+
         self.close()
+
+    def find_main_window(self):
+        widget = self.parent()
+        while widget is not None:
+            if hasattr(widget, "apply_paths"):
+                return widget
+            widget = widget.parent()
+        return None
+
 
     # ---------------------------------------------------------
     # Активация кнопки "Сохранить"
