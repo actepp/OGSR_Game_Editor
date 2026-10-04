@@ -315,12 +315,23 @@ class PhraseProperties(QDialog):
     def _validate_syntax(text):
         stripped = text.strip()
 
+        if stripped != text:
+            return False
+
         if "(" in stripped:
             if not stripped.endswith(")"):
                 return False
 
             paren_index = stripped.index("(")
-            func_name = stripped[:paren_index].strip()
+            func_name_part = stripped[:paren_index]
+            func_name = func_name_part.strip()
+
+            if func_name_part != func_name:
+                return False
+
+            if " " in func_name:
+                return False
+
             args_str = stripped[paren_index + 1:-1]
 
             if not func_name:
@@ -350,7 +361,7 @@ class PhraseProperties(QDialog):
                     arg = arg.strip()
                     if not arg:
                         return False
-                    if not (arg.startswith("'") and arg.endswith("'") and len(arg) >= 2):
+                    if not (arg.startswith("'") and arg.endswith("'") and len(arg) > 2):
                         return False
                     inner = arg[1:-1]
                     if '"' in inner:
