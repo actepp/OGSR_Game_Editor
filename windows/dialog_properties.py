@@ -175,6 +175,7 @@ class EditableLabel(QLabel):
     def set_tag(self, tag):
         self.tag = tag
         self.dialog.revalidate_label(self)
+        self.dialog.update_validated_tag(self, tag)
 
     def mousePressEvent(self, event):
         if self.dialog.active_editor is not None:
@@ -182,7 +183,6 @@ class EditableLabel(QLabel):
         self.start_edit()
 
     def start_edit(self):
-        print(f"[DEBUG] start_edit: label={self}, text={self.text()!r}, tag={self.tag!r}")
         index = self.grid.indexOf(self)
         if index < 0:
             return
@@ -197,20 +197,16 @@ class EditableLabel(QLabel):
         editor.setFocus()
         self.dialog.active_editor = editor
         self.dialog.active_label = self
-        print(f"[DEBUG] start_edit: calling on_editor_text_changed")
         self.dialog.on_editor_text_changed(editor, self)
 
     def finish_edit(self, editor):
-        print(f"[DEBUG] finish_edit called")
         if self.dialog.active_editor is None or self.dialog.active_label is None:
-            print(f"[DEBUG] finish_edit: early return")
             return
 
         new_value = editor.text().strip()
         old_value = editor.old_value
         tag = self.tag
         xml_key = self.original_param
-        print(f"[DEBUG] finish_edit: new_value={new_value!r}, old_value={old_value!r}, tag={tag!r}")
 
         if self.original_param is None:
             index = self.grid.indexOf(editor)
@@ -260,7 +256,6 @@ class EditableLabel(QLabel):
 
         self.dialog.active_editor = None
         self.dialog.active_label = None
-        print(f"[DEBUG] finish_edit: calling revalidate and check_save")
         self.dialog.revalidate_label(self)
         self.dialog.check_save_enabled()
 
@@ -970,47 +965,35 @@ class DialogProperties(QDialog):
                 elem.tail = i
 
     def check_save_enabled(self):
-        print(f"[DEBUG] check_save_enabled called")
         for row in self.new_rows:
             label = row["label"]
             if label.text().strip() == "":
-                print(f"[DEBUG] check_save_enabled: empty new row, disabling")
                 self.btn_save.setEnabled(False)
                 return
         for label, tag in self.validated_labels:
             if tag in ("precondition", "init_func"):
                 text = label.text().strip()
-                print(f"[DEBUG] check_save_enabled: checking label text={text!r}, tag={tag!r}")
                 if text and self._has_label_error(text):
-                    print(f"[DEBUG] check_save_enabled: error found, disabling")
                     self.btn_save.setEnabled(False)
                     return
-        print(f"[DEBUG] check_save_enabled: enabling")
         self.btn_save.setEnabled(True)
 
     def _has_label_error(self, text):
-        print(f"[DEBUG] _has_label_error: text={text!r}")
         if not self._validate_syntax(text):
-            print(f"[DEBUG] _has_label_error: syntax error")
             return True
         func_name, arg_count = self._parse_function_call(text)
-        print(f"[DEBUG] _has_label_error: func={func_name}, args={arg_count}, exists={func_name in self.loader.lua_functions}")
         if func_name not in self.loader.lua_functions:
-            print(f"[DEBUG] _has_label_error: function not found")
             return True
         param_info = self.loader.lua_functions_params.get(func_name, {})
         has_varargs = param_info.get("has_varargs", False)
         param_count = param_info.get("count", 0)
         if not has_varargs and arg_count > param_count:
-            print(f"[DEBUG] _has_label_error: too many args (expected {param_count}, got {arg_count})")
             return True
-        print(f"[DEBUG] _has_label_error: no error")
         return False
 
     def on_editor_text_changed(self, editor, label):
         text = editor.text().strip()
         tag = label.tag
-        print(f"[DEBUG] on_editor_text_changed: text={text!r}, tag={tag!r}")
 
         if tag not in ("precondition", "init_func"):
             editor.setStyleSheet("padding: 2px;")
@@ -1083,6 +1066,12 @@ class DialogProperties(QDialog):
                 else:
                     label.setStyleSheet("color: #a5d6a7; padding: 2px;")
                     label.setToolTip("")
+
+    def update_validated_tag(self, label, tag):
+        for i, (lbl, t) in enumerate(self.validated_labels):
+            if lbl is label:
+                self.validated_labels[i] = (lbl, tag)
+                break
 
     @staticmethod
     def _validate_syntax(text):
@@ -1178,7 +1167,6 @@ class DialogProperties(QDialog):
     def cancel_edit(self):
         editor = self.active_editor
         label = self.active_label
-        print(f"[DEBUG] cancel_edit: editor={editor}, label={label}")
         if editor is None or label is None:
             return
         index = self.grid.indexOf(editor)
@@ -1189,9 +1177,7 @@ class DialogProperties(QDialog):
         label.show()
         self.active_editor = None
         self.active_label = None
-        print(f"[DEBUG] cancel_edit: about to revalidate label={label}, text={label.text()!r}, tag={label.tag}")
         self.revalidate_label(label)
-        print(f"[DEBUG] cancel_edit: after revalidate, style={label.styleSheet()!r}")
         self.check_save_enabled()
 
     def finish_edit_external(self):
