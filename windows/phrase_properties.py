@@ -199,6 +199,53 @@ class PhraseProperties(QDialog):
 
         return results
 
+    def _get_res_loader(self):
+        mw = self.parent()
+        while mw is not None and not hasattr(mw, "res_loader"):
+            mw = mw.parent()
+        return getattr(mw, "res_loader", None)
+
+    def _update_row_color(self, row_container):
+        loader = self._get_res_loader()
+        if loader is None:
+            return
+
+        if not hasattr(loader, "lua_functions_root") or not hasattr(loader, "lua_functions_sub"):
+            return
+
+        edit = row_container.edit_edit
+        label = row_container.edit_label
+        text = edit.text().strip()
+
+        xml_tag = row_container.edit_meta.get("new_tag")
+        if xml_tag not in ("action", "precondition"):
+            edit.setStyleSheet("color: white; background-color: #202020; padding-left: 10px;")
+            label.setStyleSheet("color: #ccc; padding-left: 10px;")
+            return
+
+        if not text:
+            color = "white"
+            label_color = "#ccc"
+        else:
+            parts = text.split(".", 1)
+            if len(parts) == 2:
+                full_name = f"{parts[0]}.{parts[1]}"
+                if full_name in loader.lua_functions_root:
+                    color = "#a5d6a7"
+                    label_color = "#a5d6a7"
+                elif full_name in loader.lua_functions_sub:
+                    color = "#8bc34a"
+                    label_color = "#8bc34a"
+                else:
+                    color = "#ff5252"
+                    label_color = "#ff5252"
+            else:
+                color = "#ff5252"
+                label_color = "#ff5252"
+
+        edit.setStyleSheet(f"color: {color}; background-color: #202020; padding-left: 10px;")
+        label.setStyleSheet(f"color: {label_color}; padding-left: 10px;")
+
     def _create_row_meta(self, xml_tag, param_value, is_new):
         # old_* всегда из XML до сохранения
         # new_* самообновляемые
@@ -252,6 +299,8 @@ class PhraseProperties(QDialog):
         edit_edit = QLineEdit(param_value)
         edit_edit.setStyleSheet("color: white; background-color: #202020; padding-left: 10px;")
         edit_edit.hide()
+
+        edit_edit.textChanged.connect(lambda text, rc=row_container: self._update_row_color(rc))
 
         # meta: is_new = True если строка создана плюсом
         is_new = (param_value == "" and xml_tag == "precondition" and gui_name == "Precondition")
@@ -321,6 +370,8 @@ class PhraseProperties(QDialog):
         self.rows.append(row_container)
         self.props_container.insertLayout(len(self.rows) - 1, row_container)
 
+        self._update_row_color(row_container)
+
     def add_empty_row(self):
         # новая строка, old_* пустые
         self.add_row()
@@ -379,6 +430,7 @@ class PhraseProperties(QDialog):
                         text = edit.text().strip()
                         row.edit_meta["new_param"] = text
                         label.setText(text if text else "...")
+                        self._update_row_color(row)
                         edit.hide()
                         label.show()
 
@@ -393,6 +445,7 @@ class PhraseProperties(QDialog):
                 text = edit.text().strip()
                 row.edit_meta["new_param"] = text
                 label.setText(text if text else "...")
+                self._update_row_color(row)
                 edit.hide()
                 label.show()
 
