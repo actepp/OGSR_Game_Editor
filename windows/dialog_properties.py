@@ -95,10 +95,11 @@ class ClickFilter(QObject):
 
 
 class TagCombo(QComboBox):
-    def __init__(self, dialog, current_xml_tag, param_value):
+    def __init__(self, dialog, current_xml_tag, param_value, label=None):
         super().__init__()
         self.dialog = dialog
         self.original_param = param_value
+        self.label = label
         if current_xml_tag is None:
             gui_tag = "Precondition"
             self.original_xml_tag = None
@@ -122,6 +123,9 @@ class TagCombo(QComboBox):
         new_xml = TAG_MAP[new_gui_tag]
         if self.original_param is None and self.original_xml_tag is None:
             self.old_gui_tag = new_gui_tag
+            if self.label is not None:
+                self.label.set_tag(new_xml)
+                self.dialog.revalidate_label(self.label)
             self.dialog.check_save_enabled()
             return
         old_xml = TAG_MAP[self.old_gui_tag]
@@ -136,6 +140,9 @@ class TagCombo(QComboBox):
                 if pair["new_tag"] == pair["old_tag"] and pair["new_param"] == pair["old_param"]:
                     EDIT_BUFFER.remove(pair)
             self.old_gui_tag = new_gui_tag
+            if self.label is not None:
+                self.label.set_tag(new_xml)
+                self.dialog.revalidate_label(self.label)
             self.dialog.check_save_enabled()
             return
         if pair is not None:
@@ -148,6 +155,9 @@ class TagCombo(QComboBox):
                 "new_param": self.original_param
             })
         self.old_gui_tag = new_gui_tag
+        if self.label is not None:
+            self.label.set_tag(new_xml)
+            self.dialog.revalidate_label(self.label)
         self.dialog.check_save_enabled()
 
 
@@ -161,6 +171,10 @@ class EditableLabel(QLabel):
         self.setStyleSheet("padding: 2px;")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.original_param = text if text != "" else None
+
+    def set_tag(self, tag):
+        self.tag = tag
+        self.dialog.revalidate_label(self)
 
     def mousePressEvent(self, event):
         if self.dialog.active_editor is not None:
@@ -183,7 +197,6 @@ class EditableLabel(QLabel):
         self.dialog.active_label = self
 
     def finish_edit(self, editor):
-        # Если редактор уже удалён или сброшен — просто выходим
         if self.dialog.active_editor is None or self.dialog.active_label is None:
             return
 
@@ -192,7 +205,6 @@ class EditableLabel(QLabel):
         tag = self.tag
         xml_key = self.original_param
 
-        # Новый параметр (созданный пользователем)
         if self.original_param is None:
             index = self.grid.indexOf(editor)
             row, col, _, _ = self.grid.getItemPosition(index)
@@ -206,10 +218,10 @@ class EditableLabel(QLabel):
 
             self.dialog.active_editor = None
             self.dialog.active_label = None
+            self.dialog.revalidate_label(self)
             self.dialog.check_save_enabled()
             return
 
-        # Существующий параметр — проверяем изменения
         if old_value != new_value:
             pair = None
             for p in EDIT_BUFFER:
@@ -227,10 +239,8 @@ class EditableLabel(QLabel):
                     "new_param": new_value
                 })
 
-        # Обновляем dialog_data
         self.on_commit(new_value)
 
-        # Возвращаем label на место
         index = self.grid.indexOf(editor)
         row, col, _, _ = self.grid.getItemPosition(index)
 
@@ -243,6 +253,7 @@ class EditableLabel(QLabel):
 
         self.dialog.active_editor = None
         self.dialog.active_label = None
+        self.dialog.revalidate_label(self)
         self.dialog.check_save_enabled()
 
 class DeleteButton(QPushButton):
@@ -291,6 +302,7 @@ class DialogProperties(QDialog):
         self.active_editor = None
         self.active_label = None
         self.new_rows = []
+        self.validated_labels = []
         mw = self.parent()          # теперь это MainWindow
         self.loader = mw.res_loader
         self.dialog_id = dialog_id
@@ -410,6 +422,23 @@ class DialogProperties(QDialog):
         btn_layout = QHBoxLayout()
         main_layout.addLayout(btn_layout)
         self.btn_save = QPushButton("Сохранить")
+        self.btn_save.setStyleSheet("""
+            QPushButton {
+                background-color: #4caf50;
+                color: white;
+                font-weight: bold;
+                padding: 6px 14px;
+                border: 1px solid #3e8e41;
+            }
+            QPushButton:hover {
+                background-color: #5ecf60;
+            }
+            QPushButton:disabled {
+                background-color: #555;
+                color: #888;
+                border: 1px solid #444;
+            }
+        """)
         btn_cancel = QPushButton("Отмена")
         self.btn_save.clicked.connect(self.save_dialog)
         def cancel_all():
@@ -461,9 +490,6 @@ class DialogProperties(QDialog):
         grid = self.grid
         row = self.current_row
         for i, value in enumerate(lst):
-            combo = TagCombo(self, xml_tag, value)
-            grid.addWidget(combo, row, 0)
-            grid.addWidget(make_vline(), row, 1)
             lbl = EditableLabel(
                 value,
                 grid,
@@ -471,6 +497,10 @@ class DialogProperties(QDialog):
                 self,
                 xml_tag
             )
+            self.validated_labels.append((lbl, xml_tag))
+            combo = TagCombo(self, xml_tag, value, lbl)
+            grid.addWidget(combo, row, 0)
+            grid.addWidget(make_vline(), row, 1)
             def delete_item(i=i, combo=combo, lbl=lbl, value=value):
                 if self.active_editor is not None and self.active_label is lbl:
                     editor = self.active_editor
@@ -566,11 +596,6 @@ class DialogProperties(QDialog):
         grid = self.grid
         row = self.current_row
 
-        combo = TagCombo(self, None, None)
-        combo.setCurrentText("Precondition")
-        grid.addWidget(combo, row, 0)
-        grid.addWidget(make_vline(), row, 1)
-
         lbl = EditableLabel(
             "",
             grid,
@@ -578,6 +603,12 @@ class DialogProperties(QDialog):
             self,
             None
         )
+        self.validated_labels.append((lbl, "precondition"))
+
+        combo = TagCombo(self, None, None, lbl)
+        combo.setCurrentText("Precondition")
+        grid.addWidget(combo, row, 0)
+        grid.addWidget(make_vline(), row, 1)
 
         def delete_new():
             if self.active_editor is not None and self.active_label is lbl:
@@ -936,11 +967,155 @@ class DialogProperties(QDialog):
             if label.text().strip() == "":
                 self.btn_save.setEnabled(False)
                 return
+        for label, tag in self.validated_labels:
+            if tag in ("precondition", "init_func"):
+                text = label.text().strip()
+                if text and self._has_label_error(text):
+                    self.btn_save.setEnabled(False)
+                    return
         self.btn_save.setEnabled(True)
+
+    def _has_label_error(self, text):
+        if not self._validate_syntax(text):
+            return True
+        func_name, arg_count = self._parse_function_call(text)
+        if func_name not in self.loader.lua_functions:
+            return True
+        param_info = self.loader.lua_functions_params.get(func_name, {})
+        has_varargs = param_info.get("has_varargs", False)
+        param_count = param_info.get("count", 0)
+        if not has_varargs and arg_count > param_count:
+            return True
+        return False
+
+    def revalidate_label(self, label):
+        text = label.text().strip()
+        tag = label.tag
+
+        if tag not in ("precondition", "init_func"):
+            label.setStyleSheet("padding: 2px;")
+            label.setToolTip("")
+            return
+
+        if not text:
+            label.setStyleSheet("padding: 2px;")
+            label.setToolTip("")
+            return
+
+        if not self._validate_syntax(text):
+            label.setStyleSheet("color: #ff5252; padding: 2px;")
+            label.setToolTip("Ошибка синтаксиса: проверьте пробелы и кавычки (допустимы только одинарные)")
+        else:
+            func_name, arg_count = self._parse_function_call(text)
+            if func_name not in self.loader.lua_functions:
+                label.setStyleSheet("color: #ff5252; padding: 2px;")
+                label.setToolTip("Функция не найдена: проверьте правильность написания файла/функции")
+            else:
+                param_info = self.loader.lua_functions_params.get(func_name, {})
+                has_varargs = param_info.get("has_varargs", False)
+                param_count = param_info.get("count", 0)
+                if not has_varargs and arg_count > param_count:
+                    label.setStyleSheet("color: #ff5252; padding: 2px;")
+                    label.setToolTip(f"Превышено количество аргументов: функция ожидает {param_count}, передано {arg_count}")
+                else:
+                    label.setStyleSheet("color: #a5d6a7; padding: 2px;")
+                    label.setToolTip("")
+
+    @staticmethod
+    def _validate_syntax(text):
+        stripped = text.strip()
+
+        if stripped != text:
+            return False
+
+        if "(" in stripped:
+            if not stripped.endswith(")"):
+                return False
+
+            paren_index = stripped.index("(")
+            func_name_part = stripped[:paren_index]
+            func_name = func_name_part.strip()
+
+            if func_name_part != func_name:
+                return False
+
+            if " " in func_name:
+                return False
+
+            args_str = stripped[paren_index + 1:-1]
+
+            if not func_name:
+                return False
+
+            if args_str.strip():
+                args = [args_str]
+                in_string = False
+                string_char = None
+                result = []
+                for char in args_str:
+                    if char in ('"', "'") and not in_string:
+                        in_string = True
+                        string_char = char
+                        result.append(char)
+                    elif char == string_char and in_string:
+                        in_string = False
+                        string_char = None
+                        result.append(char)
+                    elif char == ',' and not in_string:
+                        result.append('\x00')
+                    else:
+                        result.append(char)
+                split_args = ''.join(result).split('\x00')
+
+                for arg in split_args:
+                    arg = arg.strip()
+                    if not arg:
+                        return False
+                    if not (arg.startswith("'") and arg.endswith("'") and len(arg) > 2):
+                        return False
+                    inner = arg[1:-1]
+                    if '"' in inner:
+                        return False
+                    if "'" in inner:
+                        return False
+
+                return True
+            else:
+                return False
+        else:
+            return True
+
+    @staticmethod
+    def _parse_function_call(text):
+        if "(" in text and text.endswith(")"):
+            paren_index = text.index("(")
+            func_name = text[:paren_index].strip()
+            args_str = text[paren_index + 1:-1]
+
+            if not args_str.strip():
+                return func_name, 0
+
+            arg_count = 1
+            in_string = False
+            string_char = None
+            for char in args_str:
+                if char in ('"', "'") and not in_string:
+                    in_string = True
+                    string_char = char
+                elif char == string_char and in_string:
+                    in_string = False
+                    string_char = None
+                elif char == ',' and not in_string:
+                    arg_count += 1
+
+            return func_name, arg_count
+        else:
+            return text.strip(), 0
 
     def cancel_edit(self):
         editor = self.active_editor
         label = self.active_label
+        print(f"[DEBUG] cancel_edit: editor={editor}, label={label}")
         if editor is None or label is None:
             return
         index = self.grid.indexOf(editor)
@@ -951,11 +1126,14 @@ class DialogProperties(QDialog):
         label.show()
         self.active_editor = None
         self.active_label = None
+        print(f"[DEBUG] cancel_edit: about to revalidate label={label}, text={label.text()!r}, tag={label.tag}")
+        self.revalidate_label(label)
+        print(f"[DEBUG] cancel_edit: after revalidate, style={label.styleSheet()!r}")
         self.check_save_enabled()
 
     def finish_edit_external(self):
-        if self.active_editor is not None:
-            self.active_editor.clearFocus()
+        if self.active_editor is not None and self.active_label is not None:
+            self.active_label.finish_edit(self.active_editor)
 
     def closeEvent(self, event):
         EDIT_BUFFER.clear()
