@@ -332,16 +332,12 @@ class ResourceLoader:
     def _scan_lua_functions(self):
         scripts_root = self.paths.get("scripts")
         if not scripts_root or not os.path.exists(scripts_root):
-            self.lua_functions_root = set()
-            self.lua_functions_sub = set()
+            self.lua_functions = set()
             return
 
-        root_functions = set()
-        sub_functions = set()
+        functions = set()
 
         for dirpath, dirnames, filenames in os.walk(scripts_root):
-            is_root = (os.path.normpath(dirpath) == os.path.normpath(scripts_root))
-
             for fname in filenames:
                 if not (fname.lower().endswith(".script") or fname.lower().endswith(".lua")):
                     continue
@@ -352,16 +348,14 @@ class ResourceLoader:
                 try:
                     with open(full_path, "r", encoding="latin-1", errors="ignore") as f:
                         content = f.read()
-                    functions = re.findall(r'function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(', content)
+                    func_names = re.findall(r'function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(', content)
                 except Exception:
                     continue
 
-                target = root_functions if is_root else sub_functions
-                for func_name in functions:
-                    target.add(f"{namespace}.{func_name}")
+                for func_name in func_names:
+                    functions.add(f"{namespace}.{func_name}")
 
-        self.lua_functions_root = root_functions
-        self.lua_functions_sub = sub_functions
+        self.lua_functions = functions
 
 class TextLoader:
     """

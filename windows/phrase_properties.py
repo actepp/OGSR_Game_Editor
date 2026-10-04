@@ -210,7 +210,7 @@ class PhraseProperties(QDialog):
         if loader is None:
             return
 
-        if not hasattr(loader, "lua_functions_root") or not hasattr(loader, "lua_functions_sub"):
+        if not hasattr(loader, "lua_functions"):
             return
 
         edit = row_container.edit_edit
@@ -230,12 +230,9 @@ class PhraseProperties(QDialog):
             parts = text.split(".", 1)
             if len(parts) == 2:
                 full_name = f"{parts[0]}.{parts[1]}"
-                if full_name in loader.lua_functions_root:
+                if full_name in loader.lua_functions:
                     color = "#a5d6a7"
                     label_color = "#a5d6a7"
-                elif full_name in loader.lua_functions_sub:
-                    color = "#8bc34a"
-                    label_color = "#8bc34a"
                 else:
                     color = "#ff5252"
                     label_color = "#ff5252"
