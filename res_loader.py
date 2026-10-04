@@ -333,9 +333,11 @@ class ResourceLoader:
         scripts_root = self.paths.get("scripts")
         if not scripts_root or not os.path.exists(scripts_root):
             self.lua_functions = set()
+            self.lua_functions_params = {}
             return
 
         functions = set()
+        params_map = {}
 
         for dirpath, dirnames, filenames in os.walk(scripts_root):
             for fname in filenames:
@@ -348,14 +350,23 @@ class ResourceLoader:
                 try:
                     with open(full_path, "r", encoding="latin-1", errors="ignore") as f:
                         content = f.read()
-                    func_names = re.findall(r'function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(', content)
+                    func_defs = re.findall(r'function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)', content)
                 except Exception:
                     continue
 
-                for func_name in func_names:
-                    functions.add(f"{namespace}.{func_name}")
+                for func_name, param_str in func_defs:
+                    full_name = f"{namespace}.{func_name}"
+                    functions.add(full_name)
+
+                    params = [p.strip() for p in param_str.split(",") if p.strip()]
+                    has_varargs = "..." in param_str
+                    params_map[full_name] = {
+                        "count": len(params),
+                        "has_varargs": has_varargs
+                    }
 
         self.lua_functions = functions
+        self.lua_functions_params = params_map
 
 class TextLoader:
     """

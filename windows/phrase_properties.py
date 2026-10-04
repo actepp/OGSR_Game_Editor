@@ -149,8 +149,14 @@ class PhraseProperties(QDialog):
             QPushButton:hover {
                 background-color: #5ecf60;
             }
+            QPushButton:disabled {
+                background-color: #555;
+                color: #888;
+                border: 1px solid #444;
+            }
         """)
         btn_save.clicked.connect(self.save_phrase_xml)
+        self.btn_save = btn_save
         btn_layout.addStretch()
         btn_layout.addWidget(btn_save)
 
@@ -227,21 +233,136 @@ class PhraseProperties(QDialog):
             color = "white"
             label_color = "#ccc"
         else:
-            parts = text.split(".", 1)
-            if len(parts) == 2:
-                full_name = f"{parts[0]}.{parts[1]}"
-                if full_name in loader.lua_functions:
-                    color = "#a5d6a7"
-                    label_color = "#a5d6a7"
+            if not self._validate_syntax(text):
+                color = "#ff5252"
+                label_color = "#ff5252"
+            else:
+                func_name, arg_count = self._parse_function_call(text)
+
+                if func_name in loader.lua_functions:
+                    param_info = loader.lua_functions_params.get(func_name, {})
+                    has_varargs = param_info.get("has_varargs", False)
+                    param_count = param_info.get("count", 0)
+
+                    if has_varargs or arg_count <= param_count:
+                        color = "#a5d6a7"
+                        label_color = "#a5d6a7"
+                    else:
+                        color = "#ff5252"
+                        label_color = "#ff5252"
                 else:
                     color = "#ff5252"
                     label_color = "#ff5252"
-            else:
-                color = "#ff5252"
-                label_color = "#ff5252"
 
         edit.setStyleSheet(f"color: {color}; background-color: #202020; padding-left: 10px;")
         label.setStyleSheet(f"color: {label_color}; padding-left: 10px;")
+        self._update_save_button()
+
+    def _has_errors(self):
+        for row in self.rows:
+            edit = row.edit_edit
+            text = edit.text().strip()
+            xml_tag = row.edit_meta.get("new_tag")
+
+            if xml_tag in ("action", "precondition") and text:
+                if not self._validate_syntax(text):
+                    return True
+
+                func_name, arg_count = self._parse_function_call(text)
+                if func_name not in self._get_res_loader().lua_functions:
+                    return True
+
+                param_info = self._get_res_loader().lua_functions_params.get(func_name, {})
+                has_varargs = param_info.get("has_varargs", False)
+                param_count = param_info.get("count", 0)
+                if not has_varargs and arg_count > param_count:
+                    return True
+        return False
+
+    def _update_save_button(self):
+        if not hasattr(self, "btn_save"):
+            return
+        self.btn_save.setEnabled(not self._has_errors())
+
+    @staticmethod
+    def _parse_function_call(text):
+        if "(" in text and text.endswith(")"):
+            paren_index = text.index("(")
+            func_name = text[:paren_index].strip()
+            args_str = text[paren_index + 1:-1]
+
+            if not args_str.strip():
+                return func_name, 0
+
+            arg_count = 1
+            in_string = False
+            string_char = None
+            for char in args_str:
+                if char in ('"', "'") and not in_string:
+                    in_string = True
+                    string_char = char
+                elif char == string_char and in_string:
+                    in_string = False
+                    string_char = None
+                elif char == ',' and not in_string:
+                    arg_count += 1
+
+            return func_name, arg_count
+        else:
+            return text.strip(), 0
+
+    @staticmethod
+    def _validate_syntax(text):
+        stripped = text.strip()
+
+        if "(" in stripped:
+            if not stripped.endswith(")"):
+                return False
+
+            paren_index = stripped.index("(")
+            func_name = stripped[:paren_index].strip()
+            args_str = stripped[paren_index + 1:-1]
+
+            if not func_name:
+                return False
+
+            if args_str.strip():
+                args = [args_str]
+                in_string = False
+                string_char = None
+                result = []
+                for char in args_str:
+                    if char in ('"', "'") and not in_string:
+                        in_string = True
+                        string_char = char
+                        result.append(char)
+                    elif char == string_char and in_string:
+                        in_string = False
+                        string_char = None
+                        result.append(char)
+                    elif char == ',' and not in_string:
+                        result.append('\x00')
+                    else:
+                        result.append(char)
+                split_args = ''.join(result).split('\x00')
+
+                for arg in split_args:
+                    arg = arg.strip()
+                    if not arg:
+                        return False
+                    if not (arg.startswith("'") and arg.endswith("'") and len(arg) >= 2):
+                        return False
+                    inner = arg[1:-1]
+                    if '"' in inner:
+                        return False
+                    if "'" in inner:
+                        return False
+
+                return True
+            else:
+                return False
+        else:
+            return True
 
     def _create_row_meta(self, xml_tag, param_value, is_new):
         # old_* всегда из XML до сохранения
@@ -318,6 +439,7 @@ class PhraseProperties(QDialog):
             self._register_row_in_buffer(rc)
             new_xml_tag = self.tag_map[text]
             rc.edit_meta["new_tag"] = new_xml_tag
+            self._update_row_color(rc)
 
         combo.currentTextChanged.connect(on_combo_changed)
 
