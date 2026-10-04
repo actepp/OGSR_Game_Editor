@@ -1272,10 +1272,10 @@ class InfiniteGridWidget(QWidget):
                 return
 
             # создаём новый блок
+            locale_tags = "".join(f'        <{loc}></{loc}>\n' for loc in AVAILABLE_LOCALES)
             new_block = (
                 f'    <string id="{key}">\n'
-                f'        <rus></rus>\n'
-                f'        <eng></eng>\n'
+                f'{locale_tags}'
                 f'    </string>\n'
             )
 
@@ -1301,8 +1301,7 @@ class InfiniteGridWidget(QWidget):
             print(f"[OK] New locale '{key}' created in {locale_file}")
 
             loader.text_loader.localization[key] = {
-                "rus": "",
-                "eng": "",
+                **{loc: "" for loc in AVAILABLE_LOCALES},
                 "source_file": locale_file
             }
 
@@ -1715,10 +1714,10 @@ class InfiniteGridWidget(QWidget):
         with open(locale_file, "r", encoding="windows-1251") as f:
             loc_lines = f.readlines()
 
+        locale_tags = "".join(f'        <{loc}></{loc}>\n' for loc in AVAILABLE_LOCALES)
         new_block = (
             f'    <string id="{locale_key}">\n'
-            f'        <rus></rus>\n'
-            f'        <eng></eng>\n'
+            f'{locale_tags}'
             f'    </string>\n'
         )
 
@@ -1734,8 +1733,7 @@ class InfiniteGridWidget(QWidget):
             f.writelines(loc_lines)
 
         loader.text_loader.localization[locale_key] = {
-            "rus": "",
-            "eng": "",
+            **{loc: "" for loc in AVAILABLE_LOCALES},
             "source_file": locale_file
         }
 
