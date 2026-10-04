@@ -197,6 +197,7 @@ class EditableLabel(QLabel):
         editor.setFocus()
         self.dialog.active_editor = editor
         self.dialog.active_label = self
+        self.setToolTip("")
         self.dialog.on_editor_text_changed(editor, self)
 
     def finish_edit(self, editor):
@@ -254,6 +255,7 @@ class EditableLabel(QLabel):
         self.grid.addWidget(self, row, col)
         self.show()
 
+        editor.setToolTip("")
         self.dialog.active_editor = None
         self.dialog.active_label = None
         self.dialog.revalidate_label(self)
@@ -997,40 +999,34 @@ class DialogProperties(QDialog):
 
         if tag not in ("precondition", "init_func"):
             editor.setStyleSheet("padding: 2px;")
-            label.setStyleSheet("padding: 2px;")
-            label.setToolTip("")
+            editor.setToolTip("")
             self.check_save_enabled()
             return
 
         if not text:
             editor.setStyleSheet("padding: 2px;")
-            label.setStyleSheet("padding: 2px;")
-            label.setToolTip("")
+            editor.setToolTip("")
             self.check_save_enabled()
             return
 
         if not self._validate_syntax(text):
             editor.setStyleSheet("color: #ff5252; padding: 2px;")
-            label.setStyleSheet("color: #ff5252; padding: 2px;")
-            label.setToolTip("Ошибка синтаксиса: проверьте пробелы и кавычки (допустимы только одинарные)")
+            editor.setToolTip("Ошибка синтаксиса: проверьте пробелы и кавычки (допустимы только одинарные)")
         else:
             func_name, arg_count = self._parse_function_call(text)
             if func_name not in self.loader.lua_functions:
                 editor.setStyleSheet("color: #ff5252; padding: 2px;")
-                label.setStyleSheet("color: #ff5252; padding: 2px;")
-                label.setToolTip("Функция не найдена: проверьте правильность написания файла/функции")
+                editor.setToolTip("Функция не найдена: проверьте правильность написания файла/функции")
             else:
                 param_info = self.loader.lua_functions_params.get(func_name, {})
                 has_varargs = param_info.get("has_varargs", False)
                 param_count = param_info.get("count", 0)
                 if not has_varargs and arg_count > param_count:
                     editor.setStyleSheet("color: #ff5252; padding: 2px;")
-                    label.setStyleSheet("color: #ff5252; padding: 2px;")
-                    label.setToolTip(f"Превышено количество аргументов: функция ожидает {param_count}, передано {arg_count}")
+                    editor.setToolTip(f"Превышено количество аргументов: функция ожидает {param_count}, передано {arg_count}")
                 else:
                     editor.setStyleSheet("color: #a5d6a7; padding: 2px;")
-                    label.setStyleSheet("color: #a5d6a7; padding: 2px;")
-                    label.setToolTip("")
+                    editor.setToolTip("")
 
         self.check_save_enabled()
 
@@ -1175,6 +1171,7 @@ class DialogProperties(QDialog):
         editor.deleteLater()
         self.grid.addWidget(label, row, col)
         label.show()
+        editor.setToolTip("")
         self.active_editor = None
         self.active_label = None
         self.revalidate_label(label)
