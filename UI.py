@@ -249,7 +249,7 @@ class MainWindow(QMainWindow):
         self.child_windows: list[QDialog] = []
         self.installEventFilter(self)
         self.init_menu()
-        self.update_file_menu_state()
+        self.update_workspace_menus()
         self.load_resources_with_progress()
 
     def init_menu(self):
@@ -305,6 +305,27 @@ class MainWindow(QMainWindow):
 
         action_dialog_constructor.triggered.connect(self.open_dialog_constructor)
 
+        # -----------------------------
+        # Меню "Конструктор"
+        # Показывается только пока конструктор открыт
+        # -----------------------------
+        self.constructor_menu = QMenu("Конструктор", self)
+        # видимостью управляем через действие менюбара: сам QMenu
+        # переоткрывается вместе с главным окном
+        self.action_constructor_menu = menu_bar.addMenu(self.constructor_menu)
+
+        action_save_dialog = QAction("Настройки конструктора", self)
+        action_save_dialog.triggered.connect(self.open_constructor_settings)
+        self.constructor_menu.addAction(action_save_dialog)
+
+        self.constructor_menu.addSeparator()
+
+        action_close_constructor = QAction("Закрыть конструктор", self)
+        action_close_constructor.triggered.connect(self.close_current_tool)
+        self.constructor_menu.addAction(action_close_constructor)
+
+        self.action_constructor_menu.setVisible(False)
+
         themes_menu = QMenu("Темы", self)
         #view_menu.addMenu(themes_menu)
 
@@ -345,6 +366,24 @@ class MainWindow(QMainWindow):
         self.loader_thread.start()
 
 
+    def open_constructor_settings(self):
+        """Открывает окно настроек конструктора диалогов."""
+        from windows.constructor_settings_dialog import ConstructorSettingsDialog
+
+        widget = self.centralWidget()
+        if isinstance(widget, DialogConstructor):
+            dlg = ConstructorSettingsDialog(self, widget)
+            self.child_windows.append(dlg)
+            dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+            dlg.destroyed.connect(
+                lambda _obj=None: self.child_windows.remove(dlg)
+                if dlg in self.child_windows else None
+            )
+            dlg.show()
+            apply_app_font()
+        else:
+            print("[ConstructorSettings] конструктор не открыт")
+
     def save_current_tool(self):
         widget = self.centralWidget()
 
@@ -352,7 +391,7 @@ class MainWindow(QMainWindow):
         if isinstance(widget, DialogConstructor):
             widget.save_current_dialog()
 
-    def update_file_menu_state(self):
+    def update_workspace_menus(self):
         if self.workspace_active:
             # Добавляем пункты, если их нет
             if self.action_close_tool not in self.file_menu.actions():
@@ -370,6 +409,9 @@ class MainWindow(QMainWindow):
 
             if self.action_save in self.file_menu.actions():
                 self.file_menu.removeAction(self.action_save)
+
+        # Меню конструктора живёт только пока конструктор открыт
+        self.action_constructor_menu.setVisible(self.workspace_active)
 
 
     def close_current_tool(self):
@@ -399,7 +441,7 @@ class MainWindow(QMainWindow):
             # Закрываем модуль
             self.setCentralWidget(QWidget())
             self.workspace_active = False
-            self.update_file_menu_state()
+            self.update_workspace_menus()
 
 
     def open_dialog_constructor(self):
@@ -413,7 +455,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(widget)
         self.dialog_constructor = widget   # ← ВАЖНО: сохраняем ссылку
         self.workspace_active = True
-        self.update_file_menu_state()
+        self.update_workspace_menus()
 
         # новые виджеты не наследуют шрифт приложения (активна тема-QSS)
         apply_app_font()
