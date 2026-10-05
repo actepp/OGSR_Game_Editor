@@ -7,16 +7,85 @@ from PyQt6.QtWidgets import (
     QHBoxLayout, QGridLayout, QComboBox, QSizePolicy, QFrame, QLineEdit
 )
 from PyQt6.QtCore import Qt, QEvent
+from windows.themes import (
+    combo_box_row_style, phrase_row_label_style, phrase_edit_field_style,
+    primary_button_style, divider_style, _current_theme_name, get_theme,
+    error_text_style, success_text_style
+)
 
 # Глобальный буфер изменений
 EDIT_BUFFER = []
+
+
+def _square_style(theme_name: str = None, bg=None, border=None, text_color="white"):
+    if theme_name is None:
+        theme_name = _current_theme_name()
+    c = get_theme(theme_name)
+    if bg is None:
+        bg = c["success"].name()
+    if border is None:
+        border = c["add_border"].name()
+    return (
+        f"QLabel {{"
+        f"color: {text_color};"
+        f"background-color: {bg};"
+        f"font-size: 18px;"
+        f"font-weight: bold;"
+        f"border: 1px solid {border};"
+        f"min-width: 24px;"
+        f"min-height: 24px;"
+        f"max-width: 24px;"
+        f"max-height: 24px;"
+        f"qproperty-alignment: AlignCenter;"
+        f"}}"
+    )
+
+
+def plus_square_style(theme_name: str = None):
+    return _square_style(theme_name)
+
+
+def minus_square_style(theme_name: str = None):
+    if theme_name is None:
+        theme_name = _current_theme_name()
+    c = get_theme(theme_name)
+    normal_bg = c["delete_bg"].name()
+    normal_border = c["delete_border"].name()
+    pressed_bg = c["delete_hover"].name()
+    return (
+        f"QLabel {{"
+        f"color: {c['text_inverse'].name()};"
+        f"background-color: {normal_bg};"
+        f"font-size: 18px;"
+        f"font-weight: bold;"
+        f"border: 1px solid {normal_border};"
+        f"min-width: 24px;"
+        f"min-height: 24px;"
+        f"max-width: 24px;"
+        f"max-height: 24px;"
+        f"qproperty-alignment: AlignCenter;"
+        f"}}"
+    ), (
+        f"QLabel {{"
+        f"color: {c['text_inverse'].name()};"
+        f"background-color: {pressed_bg};"
+        f"font-size: 18px;"
+        f"font-weight: bold;"
+        f"border: 1px solid {normal_border};"
+        f"min-width: 24px;"
+        f"min-height: 24px;"
+        f"max-width: 24px;"
+        f"max-height: 24px;"
+        f"qproperty-alignment: AlignCenter;"
+        f"}}"
+    )
 
 
 def make_line():
     line = QFrame()
     line.setFrameShape(QFrame.Shape.HLine)
     line.setFrameShadow(QFrame.Shadow.Sunken)
-    line.setStyleSheet("color: #444;")
+    line.setStyleSheet(divider_style())
     return line
 
 
@@ -98,34 +167,8 @@ class PhraseProperties(QDialog):
         plus_row.addStretch()
 
         self.btn_plus = ClickableSquare("+",
-            """
-            QLabel {
-                color: white;
-                background-color: #009900;
-                font-size: 18px;
-                font-weight: bold;
-                border: 1px solid #006600;
-                min-width: 24px;
-                min-height: 24px;
-                max-width: 24px;
-                max-height: 24px;
-                qproperty-alignment: AlignCenter;
-            }
-            """,
-            """
-            QLabel {
-                color: white;
-                background-color: #007700;
-                font-size: 18px;
-                font-weight: bold;
-                border: 1px solid #005500;
-                min-width: 24px;
-                min-height: 24px;
-                max-width: 24px;
-                max-height: 24px;
-                qproperty-alignment: AlignCenter;
-            }
-            """
+            plus_square_style(),
+            plus_square_style()
         )
         self.btn_plus.clicked = self.add_empty_row
         plus_row.addWidget(self.btn_plus)
@@ -138,23 +181,7 @@ class PhraseProperties(QDialog):
         main_layout.addLayout(btn_layout)
 
         btn_save = QPushButton("Сохранить")
-        btn_save.setStyleSheet("""
-            QPushButton {
-                background-color: #4caf50;
-                color: white;
-                font-weight: bold;
-                padding: 6px 14px;
-                border: 1px solid #3e8e41;
-            }
-            QPushButton:hover {
-                background-color: #5ecf60;
-            }
-            QPushButton:disabled {
-                background-color: #555;
-                color: #888;
-                border: 1px solid #444;
-            }
-        """)
+        btn_save.setStyleSheet(primary_button_style())
         btn_save.clicked.connect(self.save_phrase_xml)
         self.btn_save = btn_save
         btn_layout.addStretch()
@@ -225,27 +252,27 @@ class PhraseProperties(QDialog):
 
         xml_tag = row_container.edit_meta.get("new_tag")
         if xml_tag not in ("action", "precondition"):
-            edit.setStyleSheet("color: white; background-color: #202020; padding-left: 10px;")
-            label.setStyleSheet("color: #ccc; padding-left: 10px;")
+            edit.setStyleSheet(phrase_edit_field_style())
+            label.setStyleSheet(phrase_row_label_style())
             label.setToolTip("")
             edit.setToolTip("")
             return
 
         if not text:
-            color = "white"
-            label_color = "#ccc"
+            color = None
+            label_color = None
             tooltip = ""
         else:
             if not self._validate_syntax(text):
-                color = "#ff5252"
-                label_color = "#ff5252"
+                color = error_text_style()
+                label_color = error_text_style()
                 tooltip = "Ошибка синтаксиса: проверьте пробелы и кавычки (допустимы только одинарные)"
             else:
                 func_name, arg_count = self._parse_function_call(text)
 
                 if func_name not in loader.lua_functions:
-                    color = "#ff5252"
-                    label_color = "#ff5252"
+                    color = error_text_style()
+                    label_color = error_text_style()
                     tooltip = "Функция не найдена: проверьте правильность написания файла/функции"
                 else:
                     param_info = loader.lua_functions_params.get(func_name, {})
@@ -253,16 +280,16 @@ class PhraseProperties(QDialog):
                     param_count = param_info.get("count", 0)
 
                     if not has_varargs and arg_count > param_count:
-                        color = "#ff5252"
-                        label_color = "#ff5252"
+                        color = error_text_style()
+                        label_color = error_text_style()
                         tooltip = f"Превышено количество аргументов: функция ожидает {param_count}, передано {arg_count}"
                     else:
-                        color = "#a5d6a7"
-                        label_color = "#a5d6a7"
+                        color = success_text_style()
+                        label_color = success_text_style()
                         tooltip = ""
 
-        edit.setStyleSheet(f"color: {color}; background-color: #202020; padding-left: 10px;")
-        label.setStyleSheet(f"color: {label_color}; padding-left: 10px;")
+        edit.setStyleSheet(phrase_edit_field_style(text_color=color))
+        label.setStyleSheet(phrase_row_label_style(color=label_color))
         label.setToolTip(tooltip)
         edit.setToolTip(tooltip)
         self._update_save_button()
@@ -408,14 +435,7 @@ class PhraseProperties(QDialog):
 
         combo = QComboBox()
         combo.setFixedWidth(self.tag_column_width)
-        combo.setStyleSheet("""
-            QComboBox {
-                color: white;
-                background-color: #303030;
-                border: 1px solid #505050;
-                padding-left: 6px;
-            }
-        """)
+        combo.setStyleSheet(combo_box_row_style())
 
         for name in self.tag_map.keys():
             combo.addItem(name)
@@ -428,14 +448,14 @@ class PhraseProperties(QDialog):
 
         vline = QFrame()
         vline.setFrameShape(QFrame.Shape.VLine)
-        vline.setStyleSheet("color: #444;")
+        vline.setStyleSheet(divider_style())
         row.addWidget(vline)
 
         edit_label = QLabel(param_value if param_value else "...")
-        edit_label.setStyleSheet("color: #ccc; padding-left: 10px;")
+        edit_label.setStyleSheet(phrase_row_label_style())
 
         edit_edit = QLineEdit(param_value)
-        edit_edit.setStyleSheet("color: white; background-color: #202020; padding-left: 10px;")
+        edit_edit.setStyleSheet(phrase_edit_field_style())
         edit_edit.hide()
 
         edit_edit.textChanged.connect(lambda text, rc=row_container: self._update_row_color(rc))
@@ -466,36 +486,8 @@ class PhraseProperties(QDialog):
         row.addWidget(edit_label, 1)
         row.addWidget(edit_edit, 1)
 
-        btn_del = ClickableSquare("−",
-            """
-            QLabel {
-                color: white;
-                background-color: #b00000;
-                font-size: 18px;
-                font-weight: bold;
-                border: 1px solid #700000;
-                min-width: 24px;
-                min-height: 24px;
-                max-width: 24px;
-                max-height: 24px;
-                qproperty-alignment: AlignCenter;
-            }
-            """,
-            """
-            QLabel {
-                color: white;
-                background-color: #8a0000;
-                font-size: 18px;
-                font-weight: bold;
-                border: 1px solid #500000;
-                min-width: 24px;
-                min-height: 24px;
-                max-width: 24px;
-                max-height: 24px;
-                qproperty-alignment: AlignCenter;
-            }
-            """
-        )
+        normal_style, pressed_style = minus_square_style()
+        btn_del = ClickableSquare("−", normal_style, pressed_style)
         btn_del.clicked = lambda rc=row_container: self.delete_row(rc)
         row.addWidget(btn_del)
 

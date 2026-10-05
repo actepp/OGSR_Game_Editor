@@ -9,6 +9,13 @@ from PyQt6.QtWidgets import (
     QProgressBar, QApplication
 )
 from PyQt6.QtCore import Qt, QObject, QEvent
+from windows.themes import (
+    divider_style, disabled_npc_button_style, name_edit_style,
+    primary_button_style, path_label_style, combo_box_row_style,
+    phrase_row_label_style, phrase_edit_field_style,
+    disabled_save_button_style, error_text_style, success_text_style,
+    _current_theme_name, get_theme
+)
 
 EDIT_BUFFER = []
 
@@ -20,11 +27,45 @@ TAG_MAP = {
 }
 
 
+def _danger_button_style(theme_name: str = None):
+    if theme_name is None:
+        theme_name = _current_theme_name()
+    c = get_theme(theme_name)
+    return (
+        f"QPushButton {{"
+        f"background-color: {c['error'].name()};"
+        f"color: {c['text_inverse'].name()};"
+        f"font-weight: bold;"
+        f"border-radius: 4px;"
+        f"}}"
+        f"QPushButton:hover {{"
+        f"background-color: {c['error_hover'].name()};"
+        f"}}"
+    )
+
+
+def _success_button_style(theme_name: str = None):
+    if theme_name is None:
+        theme_name = _current_theme_name()
+    c = get_theme(theme_name)
+    return (
+        f"QPushButton {{"
+        f"background-color: {c['success'].name()};"
+        f"color: {c['text_inverse'].name()};"
+        f"font-weight: bold;"
+        f"border-radius: 4px;"
+        f"}}"
+        f"QPushButton:hover {{"
+        f"background-color: {c['success_hover'].name()};"
+        f"}}"
+    )
+
+
 def make_line():
     line = QFrame()
     line.setFrameShape(QFrame.Shape.HLine)
     line.setFrameShadow(QFrame.Shadow.Sunken)
-    line.setStyleSheet("color: #444;")
+    line.setStyleSheet(divider_style())
     return line
 
 
@@ -32,7 +73,7 @@ def make_vline():
     line = QFrame()
     line.setFrameShape(QFrame.Shape.VLine)
     line.setFrameShadow(QFrame.Shadow.Sunken)
-    line.setStyleSheet("color: #444;")
+    line.setStyleSheet(divider_style())
     return line
 
 class DialogReloadProgress(QDialog):
@@ -266,17 +307,7 @@ class DeleteButton(QPushButton):
         super().__init__("–")
         self.on_delete = on_delete
         self.setFixedWidth(30)
-        self.setStyleSheet("""
-            QPushButton {
-                background-color: #aa0000;
-                color: white;
-                font-weight: bold;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #cc0000;
-            }
-        """)
+        self.setStyleSheet(_danger_button_style())
         self.clicked.connect(self.on_delete)
 
 
@@ -285,17 +316,7 @@ class AddButton(QPushButton):
         super().__init__("+")
         self.on_add = on_add
         self.setFixedWidth(30)
-        self.setStyleSheet("""
-            QPushButton {
-                background-color: #008800;
-                color: white;
-                font-weight: bold;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #00aa00;
-            }
-        """)
+        self.setStyleSheet(_success_button_style())
         self.clicked.connect(self.on_add)
 
 
@@ -312,10 +333,8 @@ class DialogProperties(QDialog):
         self.loader = mw.res_loader
         self.dialog_id = dialog_id
         if is_new:
-            # Новый диалог — используем переданные данные
             self.dialog_data = dialog_data
         else:
-            # Старый диалог — загружаем из файлов
             self.loader.reload_dialog(dialog_id)
             self.dialog_data = self.loader.get_dialog(dialog_id)
         self.dialog_data["_delete_lines"] = []
@@ -337,17 +356,7 @@ class DialogProperties(QDialog):
         self.current_row = row
         self.name_edit = QLineEdit(dialog_id)
         self.name_edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.name_edit.setStyleSheet("""
-            QLineEdit {
-                font-size: 18px;
-                font-weight: bold;
-                padding: 6px;
-                background: #333;
-                color: #eee;
-                border: 1px solid #555;
-                border-radius: 4px;
-            }
-        """)
+        self.name_edit.setStyleSheet(name_edit_style())
         grid.addWidget(self.name_edit, row, 0, 1, 4)
 
         row += 1
@@ -357,14 +366,7 @@ class DialogProperties(QDialog):
         npc_label.setStyleSheet("font-weight: bold; padding: 4px;")
         npc_button = QPushButton(npc_name if npc_name else "Не найден")
         npc_button.setEnabled(False)
-        npc_button.setStyleSheet("""
-            QPushButton {
-                background-color: #444;
-                color: white;
-                padding: 4px 10px;
-                border-radius: 4px;
-            }
-        """)
+        npc_button.setStyleSheet(disabled_npc_button_style())
         grid.addWidget(npc_label, row, 0)
         grid.addWidget(make_vline(), row, 1)
         grid.addWidget(npc_button, row, 2, 1, 2)
@@ -379,7 +381,6 @@ class DialogProperties(QDialog):
         row += 1
         grid.addWidget(make_line(), row, 0, 1, 4)
         row += 1
-        # Путь к файлу диалога
         if not is_new:
             xml_path = self.dialog_data["xml_path"].replace("\\", "/")
             self.xml_path = xml_path
@@ -389,14 +390,13 @@ class DialogProperties(QDialog):
 
             lbl_xml = QLabel(xml_path)
             lbl_xml.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-            lbl_xml.setStyleSheet("color: #ccc;")
+            lbl_xml.setStyleSheet(path_label_style())
             grid.addWidget(lbl_xml, row, 2, 1, 2)
 
             row += 1
             grid.addWidget(make_line(), row, 0, 1, 4)
             row += 1
         else:
-            # Новый диалог — пути нет
             self.xml_path = None
         self.current_row = row
         self.render_section(
@@ -427,23 +427,7 @@ class DialogProperties(QDialog):
         btn_layout = QHBoxLayout()
         main_layout.addLayout(btn_layout)
         self.btn_save = QPushButton("Сохранить")
-        self.btn_save.setStyleSheet("""
-            QPushButton {
-                background-color: #4caf50;
-                color: white;
-                font-weight: bold;
-                padding: 6px 14px;
-                border: 1px solid #3e8e41;
-            }
-            QPushButton:hover {
-                background-color: #5ecf60;
-            }
-            QPushButton:disabled {
-                background-color: #555;
-                color: #888;
-                border: 1px solid #444;
-            }
-        """)
+        self.btn_save.setStyleSheet(primary_button_style())
         btn_cancel = QPushButton("Отмена")
         self.btn_save.clicked.connect(self.save_dialog)
         def cancel_all():
@@ -1010,22 +994,22 @@ class DialogProperties(QDialog):
             return
 
         if not self._validate_syntax(text):
-            editor.setStyleSheet("color: #ff5252; padding: 2px;")
+            editor.setStyleSheet(f"color: {error_text_style()}; padding: 2px;")
             editor.setToolTip("Ошибка синтаксиса: проверьте пробелы и кавычки (допустимы только одинарные)")
         else:
             func_name, arg_count = self._parse_function_call(text)
             if func_name not in self.loader.lua_functions:
-                editor.setStyleSheet("color: #ff5252; padding: 2px;")
+                editor.setStyleSheet(f"color: {error_text_style()}; padding: 2px;")
                 editor.setToolTip("Функция не найдена: проверьте правильность написания файла/функции")
             else:
                 param_info = self.loader.lua_functions_params.get(func_name, {})
                 has_varargs = param_info.get("has_varargs", False)
                 param_count = param_info.get("count", 0)
                 if not has_varargs and arg_count > param_count:
-                    editor.setStyleSheet("color: #ff5252; padding: 2px;")
+                    editor.setStyleSheet(f"color: {error_text_style()}; padding: 2px;")
                     editor.setToolTip(f"Превышено количество аргументов: функция ожидает {param_count}, передано {arg_count}")
                 else:
-                    editor.setStyleSheet("color: #a5d6a7; padding: 2px;")
+                    editor.setStyleSheet(f"color: {success_text_style()}; padding: 2px;")
                     editor.setToolTip("")
 
         self.check_save_enabled()
@@ -1045,22 +1029,22 @@ class DialogProperties(QDialog):
             return
 
         if not self._validate_syntax(text):
-            label.setStyleSheet("color: #ff5252; padding: 2px;")
+            label.setStyleSheet(f"color: {error_text_style()}; padding: 2px;")
             label.setToolTip("Ошибка синтаксиса: проверьте пробелы и кавычки (допустимы только одинарные)")
         else:
             func_name, arg_count = self._parse_function_call(text)
             if func_name not in self.loader.lua_functions:
-                label.setStyleSheet("color: #ff5252; padding: 2px;")
+                label.setStyleSheet(f"color: {error_text_style()}; padding: 2px;")
                 label.setToolTip("Функция не найдена: проверьте правильность написания файла/функции")
             else:
                 param_info = self.loader.lua_functions_params.get(func_name, {})
                 has_varargs = param_info.get("has_varargs", False)
                 param_count = param_info.get("count", 0)
                 if not has_varargs and arg_count > param_count:
-                    label.setStyleSheet("color: #ff5252; padding: 2px;")
+                    label.setStyleSheet(f"color: {error_text_style()}; padding: 2px;")
                     label.setToolTip(f"Превышено количество аргументов: функция ожидает {param_count}, передано {arg_count}")
                 else:
-                    label.setStyleSheet("color: #a5d6a7; padding: 2px;")
+                    label.setStyleSheet(f"color: {success_text_style()}; padding: 2px;")
                     label.setToolTip("")
 
     def update_validated_tag(self, label, tag):

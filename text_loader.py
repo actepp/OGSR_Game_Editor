@@ -53,7 +53,10 @@ class TextLoader:
                     key = node.get("id")
                     text = (node.text or "").strip()
                     if key:
-                        self.localization[key] = text
+                        self.localization[key] = {
+                            "text": text,
+                            "source_file": xml_path,
+                        }
 
             except Exception as e:
                 print(f"[TextLoader] Ошибка чтения {xml_path}: {e}")
@@ -64,4 +67,7 @@ class TextLoader:
     #   Получение строки по ключу
     # ============================================================
     def get(self, key, default=""):
-        return self.localization.get(key, default)
+        value = self.localization.get(key, default)
+        if isinstance(value, dict):
+            return value.get("text", default)
+        return value

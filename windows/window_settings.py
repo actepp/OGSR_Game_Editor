@@ -8,6 +8,10 @@ import os
 
 from settings_manager import load_settings, save_settings
 from font_manager import apply_app_font, get_font_settings
+from windows.themes import (
+    path_label_style, primary_button_style, disabled_save_button_style,
+    success_text_style, error_text_style
+)
 
 
 def normalize(path: str) -> str:
@@ -183,10 +187,10 @@ class SettingsDialog(QDialog):
 
         if exists:
             icon.setText("✓")
-            icon.setStyleSheet("color: green; font-weight: bold;")
+            icon.setStyleSheet(f"color: {success_text_style()}; font-weight: bold;")
         else:
             icon.setText("✗")
-            icon.setStyleSheet("color: red; font-weight: bold;")
+            icon.setStyleSheet(f"color: {error_text_style()}; font-weight: bold;")
 
         self.indicators.append(icon)
         self.indicator_names.append(name)
@@ -197,7 +201,7 @@ class SettingsDialog(QDialog):
         row.addWidget(lbl_name)
 
         lbl_path = QLabel(path if path else "—")
-        lbl_path.setStyleSheet("color: #bbb;")
+        lbl_path.setStyleSheet(path_label_style())
         row.addWidget(lbl_path)
 
         btn = QPushButton("Выбрать…")
@@ -247,29 +251,8 @@ class SettingsDialog(QDialog):
         self.size_spin = QSpinBox()
         self.size_spin.setRange(6, 40)
         self.size_spin.setValue(self.font_settings["size"])
+        self.size_spin.setFont(QFont(self.size_spin.font().family(), 14))
         row_size.addWidget(self.size_spin)
-        self.size_spin.setStyleSheet("""
-            QSpinBox {
-                min-height: 32px;
-                height: 32px;
-            }
-            QSpinBox::up-button {
-                width: 24px;
-                height: 16px;
-            }
-            QSpinBox::down-button {
-                width: 24px;
-                height: 16px;
-            }
-            QSpinBox::up-arrow {
-                width: 12px;
-                height: 12px;
-            }
-            QSpinBox::down-arrow {
-                width: 12px;
-                height: 12px;
-            }
-        """)
 
         layout.addLayout(row_size)
 
@@ -383,39 +366,12 @@ class SettingsDialog(QDialog):
                 has_errors = True
                 break
 
-        theme = self.settings.get("theme", "light")
-
         if has_errors:
             self.btn_save.setEnabled(False)
-
-            if theme == "dark":
-                self.btn_save.setStyleSheet("""
-                    QPushButton {
-                        background-color: #2e2e2e;
-                        color: #777;
-                        border: 1px solid #444;
-                    }
-                """)
-            else:
-                self.btn_save.setStyleSheet("""
-                    QPushButton {
-                        background-color: #e0e0e0;
-                        color: #888;
-                        border: 1px solid #ccc;
-                    }
-                """)
+            self.btn_save.setStyleSheet(disabled_save_button_style())
         else:
             self.btn_save.setEnabled(True)
-            self.btn_save.setStyleSheet("""
-                QPushButton {
-                    background-color: #4caf50;
-                    color: white;
-                    border: 1px solid #3e8e41;
-                }
-                QPushButton:hover {
-                    background-color: #45a049;
-                }
-            """)
+            self.btn_save.setStyleSheet(primary_button_style())
 
     # ---------------------------------------------------------
     # Центрирование окна

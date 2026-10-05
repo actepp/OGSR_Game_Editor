@@ -306,16 +306,16 @@ class MainWindow(QMainWindow):
         action_dialog_constructor.triggered.connect(self.open_dialog_constructor)
 
         themes_menu = QMenu("Темы", self)
-        #view_menu.addMenu(themes_menu)
+        view_menu.addMenu(themes_menu)
 
-        action_dark = QAction("Тёмная тема", self)
-        action_light = QAction("Светлая тема", self)
+        self.action_dark = QAction("Тёмная тема", self)
+        self.action_light = QAction("Светлая тема", self)
 
-        themes_menu.addAction(action_dark)
-        themes_menu.addAction(action_light)
+        themes_menu.addAction(self.action_dark)
+        themes_menu.addAction(self.action_light)
 
-        action_dark.triggered.connect(self.set_dark_theme)
-        action_light.triggered.connect(self.set_light_theme)
+        self.action_dark.triggered.connect(self.set_dark_theme)
+        self.action_light.triggered.connect(self.set_light_theme)
 
     def load_resources_with_progress(self):
         self._loader_generation += 1
@@ -458,18 +458,23 @@ class MainWindow(QMainWindow):
 
 
     def set_dark_theme(self):
-        # настройки перечитываем, иначе в файл запишется устаревшая копия
-        # (например, старый размер шрифта) и изменение темы откатит его
         self.settings = load_settings()
         self.settings["theme"] = "dark"
         save_settings(self.settings)
         apply_theme("dark")
         apply_app_font()
+        self.update_theme_checkmarks("dark")
 
-        # обновляем открытые окна настроек
         for w in self.child_windows:
             if isinstance(w, SettingsDialog):
                 w.refresh_theme()
+
+        constructor = getattr(self, "dialog_constructor", None)
+        if constructor is not None:
+            try:
+                constructor.set_theme_name("dark")
+            except RuntimeError:
+                pass
 
 
     def set_light_theme(self):
@@ -478,11 +483,23 @@ class MainWindow(QMainWindow):
         save_settings(self.settings)
         apply_theme("light")
         apply_app_font()
+        self.update_theme_checkmarks("light")
 
-        # обновляем открытые окна настроек
         for w in self.child_windows:
             if isinstance(w, SettingsDialog):
                 w.refresh_theme()
+
+        constructor = getattr(self, "dialog_constructor", None)
+        if constructor is not None:
+            try:
+                constructor.set_theme_name("light")
+            except RuntimeError:
+                pass
+
+    def update_theme_checkmarks(self, active_theme: str):
+        if hasattr(self, "action_dark") and hasattr(self, "action_light"):
+            self.action_dark.setChecked(active_theme == "dark")
+            self.action_light.setChecked(active_theme == "light")
 
     def apply_font(self):
         """Применяет сохранённые настройки шрифта ко всему приложению."""
@@ -548,24 +565,27 @@ def run_app():
     else:
         settings = load_settings()
 
-    theme = settings.get("theme", "light")
+    theme = settings.get("theme", "dark")
     apply_theme(theme)
 
     if not settings_exist():
         main_window = MainWindow(settings)
         main_window.show()
+        main_window.update_theme_checkmarks(theme)
 
         dlg = WelcomeDialog(main_window)
         dlg.exec()
 
         settings = load_settings()
         main_window.settings = settings
+        main_window.update_theme_checkmarks(settings.get("theme", "dark"))
 
         if main_window.res_loader is None or not main_window.res_loader.is_ready():
             main_window.reload_resources(settings)
     else:
         main_window = MainWindow(settings)
         main_window.show()
+        main_window.update_theme_checkmarks(theme)
 
     # Шрифт применяется после создания окна: до этого применять не к чему
     apply_app_font()
