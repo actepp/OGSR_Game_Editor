@@ -31,12 +31,8 @@ jobs:
         run: |
           pyinstaller --onefile --name OGSR_Game_Editor OGSR_Game_Editor.py
 
-      - name: Create ZIP
-        run: |
-          Compress-Archive -Path dist\OGSR_Game_Editor.exe -DestinationPath OGSR_Game_Editor.zip
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: OGSR_Game_Editor
-          path: OGSR_Game_Editor.zip
+          path: dist\OGSR_Game_Editor.exe
