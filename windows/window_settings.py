@@ -1,12 +1,13 @@
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QListWidget, QWidget, QFileDialog, QFontComboBox, QSpinBox, QApplication
+    QListWidget, QWidget, QFileDialog, QFontComboBox, QSpinBox
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 import os
 
 from settings_manager import load_settings, save_settings
+from font_manager import apply_app_font, get_font_settings
 
 
 def normalize(path: str) -> str:
@@ -18,6 +19,7 @@ REQUIRED_PATHS = [
     "configs",
     "configs/gameplay",
     "configs/creatures",
+    "configs/text",
     "spawns",
     "scripts"
 ]
@@ -41,10 +43,7 @@ class SettingsDialog(QDialog):
 
         self.settings = load_settings()
         self.paths = self.settings.get("paths", {})
-        self.font_settings = self.settings.get("font", {
-            "family": "Segoe UI",
-            "size": 10
-        })
+        self.font_settings = get_font_settings(self.settings)
 
         # авто‑сканирование дефолтных подпапок
         self.auto_scan_gamedata()
@@ -65,9 +64,19 @@ class SettingsDialog(QDialog):
         self.content_widget.setLayout(self.content_layout)
         main_layout.addWidget(self.content_widget)
 
-        self.update_category_styles()
+        # Строим обе категории сразу
+        self.paths_container = QWidget()
+        self._build_paths_category(self.paths_container)
 
-        self.show_category_paths()
+        self.font_container = QWidget()
+        self._build_font_category(self.font_container)
+
+        # По умолчанию показываем "Папки"
+        self.content_layout.addWidget(self.paths_container)
+        self.content_layout.addWidget(self.font_container)
+        self.font_container.hide()
+
+        self.update_category_styles()
 
         self.category_list.currentRowChanged.connect(self.change_category)
 
@@ -103,9 +112,14 @@ class SettingsDialog(QDialog):
     # Жирность активного пункта
     # ---------------------------------------------------------
     def update_category_styles(self):
+        current = get_font_settings()
+
         for i in range(self.category_list.count()):
             item = self.category_list.item(i)
-            f = item.font()
+            # шрифт строим от применённого пользовательского, а не от item.font():
+            # item.font() без явно заданного шрифта отдаёт шрифт стиля,
+            # и он "запекается" в элементе списка навсегда
+            f = QFont(current["family"], current["size"])
             f.setBold(i == self.category_list.currentRow())
             item.setFont(f)
 
@@ -113,21 +127,27 @@ class SettingsDialog(QDialog):
     # Переключение категорий
     # ---------------------------------------------------------
     def change_category(self, index):
-        self.clear_layout(self.content_layout)
         self.update_category_styles()
 
         if index == 0:
-            self.show_category_paths()
+            self.paths_container.show()
+            self.font_container.hide()
         elif index == 1:
-            self.show_category_font()
+            self.paths_container.hide()
+            self.font_container.show()
+            self._refresh_font_ui()
 
     # ---------------------------------------------------------
     # Категория "Папки"
     # ---------------------------------------------------------
-    def show_category_paths(self):
+    def _build_paths_category(self, container):
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        container.setLayout(layout)
+
         title = QLabel("Пути OGSR")
         title.setStyleSheet("font-size: 18px; font-weight: bold;")
-        self.content_layout.addWidget(title)
+        layout.addWidget(title)
 
         items = [
             ("gamedata", normalize(self.paths.get("gamedata", ""))),
@@ -136,111 +156,24 @@ class SettingsDialog(QDialog):
             ("configs/creatures", normalize(self.paths.get("configs/creatures", ""))),
             ("configs/text", normalize(self.paths.get("configs/text", ""))),
             ("spawns", normalize(self.paths.get("spawns", ""))),
-            ("scripts", normalize(self.paths.get("scripts", ""))),   # ← ДОБАВЛЕНО
+            ("scripts", normalize(self.paths.get("scripts", ""))),
         ]
-
 
         self.indicators = []
         self.indicator_names = []
 
         for name, path in items:
-            self._add_path_row(name, path)
+            self._add_path_row(name, path, layout)
 
         self.btn_save = QPushButton("Сохранить")
         self.btn_save.clicked.connect(self.save_all)
-        self.content_layout.addWidget(self.btn_save)
+        layout.addWidget(self.btn_save)
 
-        self.content_layout.addStretch()
+        layout.addStretch()
 
         self.update_save_button_state()
 
-    # ---------------------------------------------------------
-    # Категория "Шрифт"
-    # ---------------------------------------------------------
-    def show_category_font(self):
-        title = QLabel("Настройки шрифта")
-        title.setStyleSheet("font-size: 18px; font-weight: bold;")
-        self.content_layout.addWidget(title)
-
-        row_font = QHBoxLayout()
-        lbl_font = QLabel("Семейство шрифта:")
-        row_font.addWidget(lbl_font)
-
-        self.font_combo = QFontComboBox()
-        self.font_combo.setFontFilters(
-            QFontComboBox.FontFilter.ScalableFonts
-        )
-        self.font_combo.setCurrentFont(QFont(self.font_settings["family"]))
-        row_font.addWidget(self.font_combo)
-
-        self.content_layout.addLayout(row_font)
-
-        row_size = QHBoxLayout()
-        lbl_size = QLabel("Размер шрифта:")
-        row_size.addWidget(lbl_size)
-
-        # 🔥 фикс кликабельности кнопки "увеличить"
-        QApplication.setStyle("Fusion")
-
-        self.size_spin = QSpinBox()
-        self.size_spin.setRange(6, 40)
-        self.size_spin.setValue(self.font_settings["size"])
-        row_size.addWidget(self.size_spin)
-        self.size_spin.setStyleSheet("""
-            QSpinBox {
-                min-height: 32px;
-                height: 32px;
-                font-size: 16px;
-            }
-            QSpinBox::up-button {
-                width: 24px;
-                height: 16px;
-            }
-            QSpinBox::down-button {
-                width: 24px;
-                height: 16px;
-            }
-            QSpinBox::up-arrow {
-                width: 12px;
-                height: 12px;
-            }
-            QSpinBox::down-arrow {
-                width: 12px;
-                height: 12px;
-            }
-        """)
-
-        self.content_layout.addLayout(row_size)
-
-        btn_save = QPushButton("Применить шрифт")
-        btn_save.clicked.connect(self.save_font)
-        self.content_layout.addWidget(btn_save)
-
-        self.content_layout.addStretch()
-
-    # ---------------------------------------------------------
-    # Сохранение шрифта
-    # ---------------------------------------------------------
-    def save_font(self):
-        family = self.font_combo.currentFont().family()
-        size = self.size_spin.value()
-
-        self.font_settings["family"] = family
-        self.font_settings["size"] = size
-
-        self.settings["font"] = self.font_settings
-        save_settings(self.settings)
-
-        font = QFont(family, size)
-        app = QApplication.instance()
-        app.setFont(font)
-
-        self.close()
-
-    # ---------------------------------------------------------
-    # Создание строки пути
-    # ---------------------------------------------------------
-    def _add_path_row(self, name, path):
+    def _add_path_row(self, name, path, parent_layout):
         row = QHBoxLayout()
 
         icon = QLabel()
@@ -269,15 +202,10 @@ class SettingsDialog(QDialog):
 
         btn = QPushButton("Выбрать…")
 
-        # gamedata — всегда выбираем вручную
         if name == "gamedata":
             btn.clicked.connect(lambda _, n=name, l=lbl_path: self.select_path(n, l))
-
-        # configs — НИКОГДА не выбираем вручную
         elif name == "configs":
             btn.setEnabled(False)
-
-        # остальные — выбираем только если отсутствуют
         else:
             if exists:
                 btn.setEnabled(False)
@@ -285,11 +213,130 @@ class SettingsDialog(QDialog):
                 btn.clicked.connect(lambda _, n=name, l=lbl_path: self.select_path(n, l))
 
         row.addWidget(btn)
-        self.content_layout.addLayout(row)
-
+        parent_layout.addLayout(row)
 
     # ---------------------------------------------------------
-    # Выбор пути
+    # Категория "Шрифт"
+    # ---------------------------------------------------------
+    def _build_font_category(self, container):
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        container.setLayout(layout)
+
+        title = QLabel("Настройки шрифта")
+        title.setStyleSheet("font-size: 18px; font-weight: bold;")
+        layout.addWidget(title)
+
+        row_font = QHBoxLayout()
+        lbl_font = QLabel("Семейство шрифта:")
+        row_font.addWidget(lbl_font)
+
+        self.font_combo = QFontComboBox()
+        self.font_combo.setFontFilters(
+            QFontComboBox.FontFilter.ScalableFonts
+        )
+        self.font_combo.setCurrentFont(QFont(self.font_settings["family"]))
+        row_font.addWidget(self.font_combo)
+
+        layout.addLayout(row_font)
+
+        row_size = QHBoxLayout()
+        lbl_size = QLabel("Размер шрифта:")
+        row_size.addWidget(lbl_size)
+
+        self.size_spin = QSpinBox()
+        self.size_spin.setRange(6, 40)
+        self.size_spin.setValue(self.font_settings["size"])
+        row_size.addWidget(self.size_spin)
+        self.size_spin.setStyleSheet("""
+            QSpinBox {
+                min-height: 32px;
+                height: 32px;
+            }
+            QSpinBox::up-button {
+                width: 24px;
+                height: 16px;
+            }
+            QSpinBox::down-button {
+                width: 24px;
+                height: 16px;
+            }
+            QSpinBox::up-arrow {
+                width: 12px;
+                height: 12px;
+            }
+            QSpinBox::down-arrow {
+                width: 12px;
+                height: 12px;
+            }
+        """)
+
+        layout.addLayout(row_size)
+
+        btn_save = QPushButton("Применить шрифт")
+        btn_save.clicked.connect(self.save_font)
+        layout.addWidget(btn_save)
+
+        layout.addStretch()
+
+        self._font_ui_dirty = False
+        self.font_combo.currentFontChanged.connect(self._mark_font_ui_dirty)
+        self.size_spin.valueChanged.connect(self._mark_font_ui_dirty)
+
+    def _mark_font_ui_dirty(self, *_):
+        self._font_ui_dirty = True
+
+    def _refresh_font_ui(self):
+        if self._font_ui_dirty:
+            # не затираем несохранённые правки пользователя
+            return
+
+        self.font_settings = get_font_settings(load_settings())
+
+        for widget in (self.font_combo, self.size_spin):
+            widget.blockSignals(True)
+        try:
+            self.font_combo.setCurrentFont(QFont(self.font_settings["family"]))
+            self.size_spin.setValue(self.font_settings["size"])
+        finally:
+            for widget in (self.font_combo, self.size_spin):
+                widget.blockSignals(False)
+
+    # ---------------------------------------------------------
+    # Сохранение шрифта
+    # ---------------------------------------------------------
+    def save_font(self):
+        family = self.font_combo.currentFont().family()
+        size = self.size_spin.value()
+
+        self.font_settings["family"] = family
+        self.font_settings["size"] = size
+
+        self.settings["font"] = dict(self.font_settings)
+        save_settings(self.settings)
+
+        print(f"[FONT] save_font: family={family}, size={size}")
+
+        apply_app_font(family, size)
+        self.update_category_styles()
+
+        main_window = self.find_main_window()
+        if main_window is not None:
+            # синхронизируем копию настроек главного окна, иначе она
+            # перезапишет новый размер шрифта при следующем сохранении
+            main_window.settings["font"] = dict(self.font_settings)
+
+        self.close()
+
+    # ---------------------------------------------------------
+    # Реакция на смену темы (вызывается из MainWindow)
+    # ---------------------------------------------------------
+    def refresh_theme(self):
+        apply_app_font()
+        self.update_category_styles()
+
+    # ---------------------------------------------------------
+    #   Выбор пути
     # ---------------------------------------------------------
     def select_path(self, name, label_widget):
         path = QFileDialog.getExistingDirectory(self, f"Выбор папки для {name}")
@@ -300,8 +347,6 @@ class SettingsDialog(QDialog):
 
             if name == "gamedata":
                 self.auto_scan_gamedata()
-
-            self.change_category(0)
 
     # ---------------------------------------------------------
     #   Сохранение путей
@@ -326,7 +371,6 @@ class SettingsDialog(QDialog):
                 return widget
             widget = widget.parent()
         return None
-
 
     # ---------------------------------------------------------
     # Активация кнопки "Сохранить"
@@ -372,20 +416,6 @@ class SettingsDialog(QDialog):
                     background-color: #45a049;
                 }
             """)
-
-    # ---------------------------------------------------------
-    # Очистка layout
-    # ---------------------------------------------------------
-    def clear_layout(self, layout):
-        while layout.count():
-            item = layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.deleteLater()
-            else:
-                sub = item.layout()
-                if sub:
-                    self.clear_layout(sub)
 
     # ---------------------------------------------------------
     # Центрирование окна

@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QMessageBox, QToolTip, QFileDialog,
     QMenuBar, QMenu
 )
-from PyQt6.QtGui import QAction, QFont
+from PyQt6.QtGui import QAction
 from PyQt6.QtCore import Qt, QEvent
 from windows.window_settings import SettingsDialog
 from windows.themes import apply_theme
@@ -21,6 +21,7 @@ from settings_manager import (
     settings_exist, load_settings,
     save_settings, DEFAULT_SETTINGS
 )
+from font_manager import apply_app_font
 
 class WelcomeDialog(QDialog):
     def __init__(self, parent=None):
@@ -414,6 +415,9 @@ class MainWindow(QMainWindow):
         self.workspace_active = True
         self.update_file_menu_state()
 
+        # новые виджеты не наследуют шрифт приложения (активна тема-QSS)
+        apply_app_font()
+
     def apply_paths(self, paths):
         """Сохраняет пути и сразу перечитывает ресурсы (без перезапуска)."""
         settings = load_settings()
@@ -454,9 +458,13 @@ class MainWindow(QMainWindow):
 
 
     def set_dark_theme(self):
+        # настройки перечитываем, иначе в файл запишется устаревшая копия
+        # (например, старый размер шрифта) и изменение темы откатит его
+        self.settings = load_settings()
         self.settings["theme"] = "dark"
         save_settings(self.settings)
         apply_theme("dark")
+        apply_app_font()
 
         # обновляем открытые окна настроек
         for w in self.child_windows:
@@ -465,18 +473,33 @@ class MainWindow(QMainWindow):
 
 
     def set_light_theme(self):
+        self.settings = load_settings()
         self.settings["theme"] = "light"
         save_settings(self.settings)
         apply_theme("light")
+        apply_app_font()
 
         # обновляем открытые окна настроек
         for w in self.child_windows:
             if isinstance(w, SettingsDialog):
                 w.refresh_theme()
 
+    def apply_font(self):
+        """Применяет сохранённые настройки шрифта ко всему приложению."""
+        apply_app_font()
+
     def open_settings(self):
         dlg = SettingsDialog(self)
         self.child_windows.append(dlg)
+
+        def forget_closed_dialog(_obj=None):
+            # закрытый диалог больше не нужен: без этого он остаётся
+            # в child_windows, а его виджеты — в QApplication.allWidgets()
+            if dlg in self.child_windows:
+                self.child_windows.remove(dlg)
+
+        dlg.destroyed.connect(forget_closed_dialog)
+        dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         dlg.show()
 
     def eventFilter(self, obj, event):
@@ -515,8 +538,20 @@ def validate_settings_paths(settings):
 def run_app():
     app = QApplication(sys.argv)
 
+    # Стиль выбирается один раз при старте. QApplication.setStyle() сбрасывает
+    # явно заданные шрифты виджетов, поэтому менять стиль позже нельзя —
+    # шрифт пришлось бы применять заново каждый раз.
+    app.setStyle("Fusion")
+
     if not settings_exist():
         settings = DEFAULT_SETTINGS.copy()
+    else:
+        settings = load_settings()
+
+    theme = settings.get("theme", "light")
+    apply_theme(theme)
+
+    if not settings_exist():
         main_window = MainWindow(settings)
         main_window.show()
 
@@ -526,25 +561,26 @@ def run_app():
         settings = load_settings()
         main_window.settings = settings
 
-        # мастер уже перечитал ресурсы — повторно грузим, только если не вышло
         if main_window.res_loader is None or not main_window.res_loader.is_ready():
             main_window.reload_resources(settings)
     else:
-        settings = load_settings()
         main_window = MainWindow(settings)
         main_window.show()
 
-    theme = settings.get("theme", "light")
-    apply_theme(theme)
-
-    font_settings = settings.get("font", {"family": "Segoe UI", "size": 10})
-    app.setFont(QFont(font_settings["family"], font_settings["size"]))
+    # Шрифт применяется после создания окна: до этого применять не к чему
+    apply_app_font()
 
     paths_ok = validate_settings_paths(settings)
 
     if not paths_ok:
         dlg = SettingsDialog(main_window)
         main_window.child_windows.append(dlg)
+        dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        dlg.destroyed.connect(
+            lambda _obj=None: main_window.child_windows.remove(dlg)
+            if dlg in main_window.child_windows else None
+        )
         dlg.show()
+        apply_app_font()
 
     sys.exit(app.exec())
