@@ -1,0 +1,42 @@
+name: Build EXE
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          if (Test-Path requirements.txt) {
+            pip install -r requirements.txt
+          }
+
+      - name: Build EXE
+        run: |
+          pyinstaller --onefile --name OGSR_Game_Editor OGSR_Game_Editor.py
+
+      - name: Create ZIP
+        run: |
+          Compress-Archive -Path dist\OGSR_Game_Editor.exe -DestinationPath OGSR_Game_Editor.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OGSR_Game_Editor
+          path: OGSR_Game_Editor.zip
