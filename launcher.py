@@ -6,7 +6,7 @@ import sys
 import threading
 import subprocess
 import webbrowser
-from urllib.parse import urlparse
+import time
 
 REPO_OWNER = "actepp"
 REPO_NAME = "OGSR_Game_Editor"
@@ -49,7 +49,11 @@ def find_exe_asset(release_data):
     if not release_data:
         return None
     try:
-        resp = requests.get(API_URL, timeout=10)
+        headers = {
+            "Accept": "application/vnd.github.v3+json",
+            "User-Agent": "OGSR-Game-Editor-Launcher"
+        }
+        resp = requests.get(API_URL, headers=headers, timeout=15)
         resp.raise_for_status()
         data = resp.json()
         for asset in data.get("assets", []):
@@ -97,7 +101,7 @@ class Launcher(tk.Tk):
         btn_frame = ttk.Frame(self)
         btn_frame.pack(pady=(10, 0))
 
-        self.btn_update = ttk.Button(btn_frame, text="Обновить", command=self._start_update)
+        self.btn_update = ttk.Button(btn_frame, text="Обновить", command=self._confirm_update)
         self.btn_update.pack(side=tk.LEFT, padx=5)
 
         self.btn_launch = ttk.Button(btn_frame, text="Запустить OGSR Editor", command=self._launch_exe)
@@ -119,15 +123,8 @@ class Launcher(tk.Tk):
             exe_path = os.path.join(exe_dir, EXE_NAME)
             exe_exists = os.path.exists(exe_path)
 
-            print(f"[Launcher] exe_dir: {exe_dir}")
-            print(f"[Launcher] exe_path: {exe_path}")
-            print(f"[Launcher] exe_exists: {exe_exists}")
-
             release = get_latest_release()
-            print(f"[Launcher] release: {release}")
-
             asset = find_exe_asset(release)
-            print(f"[Launcher] asset: {asset}")
 
             self.after(0, lambda: self._on_check_complete(release, asset, exe_exists))
 
@@ -144,8 +141,8 @@ class Launcher(tk.Tk):
         self.latest_var.set(f"Последняя версия: {release['tag']} ({release['published_at'][:10]})")
 
         if not exe_exists:
-            self.status_var.set("Редактор не найден. Скачиваю последнюю версию...")
-            self._start_update()
+            self.status_var.set("Редактор не найден. Нажмите «Обновить» для скачивания.")
+            self.btn_launch.config(state=tk.DISABLED)
             return
 
         if not self.local_version:
@@ -154,8 +151,49 @@ class Launcher(tk.Tk):
 
         if self.local_version != release["tag"]:
             self.status_var.set(f"Доступно обновление: {self.local_version} → {release['tag']}")
+            self.btn_update.config(state=tk.NORMAL)
         else:
             self.status_var.set("У вас установлена последняя версия.")
+            self.btn_update.config(state=tk.DISABLED)
+
+    def _confirm_update(self):
+        if not self.asset_info or not self.latest_info:
+            return
+
+        answer = messagebox.askyesno(
+            "Обновление",
+            f"Доступна версия {self.latest_info['tag']}.\n\n"
+            f"Обновить сейчас?\n"
+            f"Текущая версия: {self.local_version or 'не определена'}"
+        )
+        if answer:
+            self._start_update()
+
+    def _kill_exe(self):
+        exe_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+        exe_path = os.path.join(exe_dir, EXE_NAME)
+        if not os.path.exists(exe_path):
+            return True
+
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/IM", EXE_NAME],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            time.sleep(1)
+            return True
+        except Exception:
+            pass
+
+        try:
+            import signal
+            os.kill(os.getpid(), signal.SIGTERM)
+        except Exception:
+            pass
+
+        return False
 
     def _start_update(self):
         if not self.asset_info or not self.latest_info:
@@ -167,19 +205,28 @@ class Launcher(tk.Tk):
 
         self._set_busy(True)
         self.progress["value"] = 0
-        self.status_var.set("Скачивание обновления...")
+        self.status_var.set("Подготовка к обновлению...")
 
         def worker():
             try:
                 exe_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
                 exe_path = os.path.join(exe_dir, EXE_NAME)
-                new_exe_path = exe_path + ".new"
+                version_path = os.path.join(exe_dir, VERSION_FILE)
+
+                self.after(0, lambda: self.status_var.set("Закрываю редактор..."))
+                self._kill_exe()
+
+                self.after(0, lambda: self.status_var.set("Удаляю старую версию..."))
+                if os.path.exists(exe_path):
+                    os.remove(exe_path)
+
+                self.after(0, lambda: self.status_var.set("Скачиваю обновление..."))
 
                 with requests.get(self.asset_info["url"], stream=True, timeout=60) as r:
                     r.raise_for_status()
                     total = int(r.headers.get("content-length", 0))
                     downloaded = 0
-                    with open(new_exe_path, "wb") as f:
+                    with open(exe_path, "wb") as f:
                         for chunk in r.iter_content(chunk_size=8192):
                             if chunk:
                                 f.write(chunk)
@@ -187,6 +234,12 @@ class Launcher(tk.Tk):
                                 if total:
                                     pct = downloaded / total * 100
                                     self.after(0, lambda p=pct: self.progress.config(value=p))
+
+                with open(version_path, "w", encoding="utf-8") as f:
+                    f.write(self.latest_info["tag"])
+
+                self.local_version = self.latest_info["tag"]
+                self.version_var.set(f"Локальная версия: {self.local_version}")
 
                 self.after(0, lambda: self._on_update_complete(True))
             except Exception as e:
@@ -197,18 +250,12 @@ class Launcher(tk.Tk):
     def _on_update_complete(self, success, error=""):
         self._set_busy(False)
         if success:
-            exe_path = os.path.join(os.path.dirname(sys.executable), EXE_NAME)
-            if not os.path.exists(exe_path):
-                self.status_var.set("Редактор скачан. Нажмите «Запустить».")
-                messagebox.showinfo("Готово", "Редактор скачан успешно.\n\nНажмите «Запустить», чтобы открыть его.")
-            else:
-                self.status_var.set("Обновление скачано. Оно будет установлено после перезапуска.")
-                messagebox.showinfo("Обновление", "Обновление скачано успешно.\n\n"
-                                                  "Нажмите «Запустить», чтобы запустить редактор.\n"
-                                                  "После его закрытия обновление будет установлено автоматически.")
+            self.status_var.set("Обновление установлено.")
+            messagebox.showinfo("Готово", "Обновление установлено успешно.\n\nНажмите «Запустить», чтобы открыть редактор.")
+            self.btn_launch.config(state=tk.NORMAL)
         else:
-            self.status_var.set("Ошибка скачивания обновления.")
-            messagebox.showerror("Ошибка", f"Не удалось скачать обновление:\n{error}")
+            self.status_var.set("Ошибка обновления.")
+            messagebox.showerror("Ошибка", f"Не удалось обновить редактор:\n{error}")
 
     def _launch_exe(self):
         exe_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
@@ -216,21 +263,6 @@ class Launcher(tk.Tk):
         if not os.path.exists(exe_path):
             messagebox.showerror("Ошибка", f"Файл {EXE_NAME} не найден.\nСначала скачайте редактор через кнопку «Обновить».")
             return
-
-        new_exe_path = exe_path + ".new"
-        if os.path.exists(new_exe_path):
-            bat_path = os.path.join(exe_dir, "update.bat")
-            with open(bat_path, "w", encoding="utf-8") as f:
-                f.write("@echo off\n")
-                f.write("timeout /t 3 /nobreak >nul\n")
-                f.write(f"move /Y \"{new_exe_path}\" \"{exe_path}\"\n")
-                f.write(f"del /F /Q \"%~f0\"\n")
-
-            try:
-                subprocess.Popen([bat_path], shell=False, cwd=exe_dir)
-            except Exception as e:
-                messagebox.showerror("Ошибка", f"Не удалось запустить обновление:\n{e}")
-                return
 
         try:
             subprocess.Popen([exe_path], shell=False, cwd=exe_dir)
